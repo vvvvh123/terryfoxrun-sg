@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:terryfoxrun;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;NON_KEYWORDS=YEAR
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+  flyway:
+    enabled: true
+    locations: classpath:db/testmigration,classpath:db/migration
+
+app:
+  security:
+    enabled: false

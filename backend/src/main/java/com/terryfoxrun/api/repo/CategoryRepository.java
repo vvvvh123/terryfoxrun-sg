@@ -1,0 +1,12 @@
+package com.terryfoxrun.api.repo;
+
+import com.terryfoxrun.api.domain.Category;
+import com.terryfoxrun.api.domain.Event;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+
+public interface CategoryRepository extends JpaRepository<Category, Long> {
+    List<Category> findByEvent(Event event);
+}
+
