@@ -1,44 +1,69 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Box,
   Button,
+  Chip,
+  FormControl,
+  InputLabel,
+  MenuItem,
   Paper,
+  Select,
   Stack,
   TextField,
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/GridLegacy";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { EventDto, PaymentAttempt, ShirtInventoryItem, SlideshowImage, confirmPayment, getCurrentEvent, getInventory, getPendingPayments, getSlideshow, saveSlideshow } from "@/lib/api";
+import {
+  EventDto,
+  PaymentAttempt,
+  ShirtInventoryItem,
+  SlideshowImage,
+  confirmPayment,
+  exportCsvUrl,
+  getCurrentEvent,
+  getInventory,
+  getPaymentAttempts,
+  getSlideshow,
+  rejectPayment,
+  saveSlideshow,
+} from "@/lib/api";
+
+function formatMoney(cents?: number) {
+  return new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" }).format((cents ?? 0) / 100);
+}
 
 export default function AdminPage() {
   const [event, setEvent] = useState<EventDto | null>(null);
   const [pendingPayments, setPendingPayments] = useState<PaymentAttempt[]>([]);
   const [inventory, setInventory] = useState<ShirtInventoryItem[]>([]);
   const [slides, setSlides] = useState<SlideshowImage[]>([]);
-  const [adminTransactionId, setAdminTransactionId] = useState("");
+  const [statusFilter, setStatusFilter] = useState("PENDING_ADMIN_VERIFICATION");
+  const [methodFilter, setMethodFilter] = useState<"PAYNOW" | "BANK_TRANSFER" | "">("");
+  const [adminTransactionIds, setAdminTransactionIds] = useState<Record<number, string>>({});
+  const [rejectionReasons, setRejectionReasons] = useState<Record<number, string>>({});
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function loadAdmin() {
+  const loadAdmin = useCallback(async () => {
     const current = await getCurrentEvent();
     setEvent(current);
     const [payments, inventoryItems, configuredSlides] = await Promise.all([
-      getPendingPayments(),
+      getPaymentAttempts({ status: statusFilter, method: methodFilter, eventId: current.id }),
       getInventory(current.id),
       getSlideshow(current.id),
     ]);
     setPendingPayments(payments);
     setInventory(inventoryItems);
     setSlides(configuredSlides.length ? configuredSlides : [{ imageUrl: "", blurb: "", displayOrder: 1, active: true }]);
-  }
+  }, [methodFilter, statusFilter]);
 
   useEffect(() => {
     loadAdmin().catch(() => setError("Start the backend to use admin tools."));
-  }, []);
+  }, [loadAdmin]);
 
   const metrics = useMemo(() => {
     const remaining = inventory.reduce((sum, item) => sum + Number(item.quantityAvailable || 0), 0);
@@ -52,11 +77,27 @@ export default function AdminPage() {
   async function handleConfirm(paymentAttemptId: number) {
     setError("");
     try {
-      await confirmPayment(paymentAttemptId, adminTransactionId || `ADMIN-${paymentAttemptId}`);
+      await confirmPayment(paymentAttemptId, adminTransactionIds[paymentAttemptId] || `ADMIN-${paymentAttemptId}`);
       setMessage("Payment confirmed and inventory updated.");
       await loadAdmin();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not confirm payment.");
+    }
+  }
+
+  async function handleReject(paymentAttemptId: number) {
+    setError("");
+    const reason = rejectionReasons[paymentAttemptId]?.trim();
+    if (!reason) {
+      setError("Please enter a rejection reason before rejecting payment.");
+      return;
+    }
+    try {
+      await rejectPayment(paymentAttemptId, reason);
+      setMessage("Payment rejected. Inventory was not reduced.");
+      await loadAdmin();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not reject payment.");
     }
   }
 
@@ -98,23 +139,82 @@ export default function AdminPage() {
         <Grid item xs={12} lg={7}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h5">Payment verification queue</Typography>
-            <TextField
-              fullWidth
-              label="Admin transaction ID / bank reference"
-              value={adminTransactionId}
-              onChange={(e) => setAdminTransactionId(e.target.value)}
-              sx={{ mt: 2 }}
-            />
+            <Grid container spacing={2} sx={{ mt: 1 }}>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Status</InputLabel>
+                  <Select label="Status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+                    <MenuItem value="PENDING_ADMIN_VERIFICATION">Pending verification</MenuItem>
+                    <MenuItem value="CONFIRMED">Confirmed</MenuItem>
+                    <MenuItem value="PAYMENT_REJECTED">Rejected</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Method</InputLabel>
+                  <Select label="Method" value={methodFilter} onChange={(e) => setMethodFilter(e.target.value as "PAYNOW" | "BANK_TRANSFER" | "")}>
+                    <MenuItem value="">All methods</MenuItem>
+                    <MenuItem value="PAYNOW">PayNow</MenuItem>
+                    <MenuItem value="BANK_TRANSFER">Bank transfer</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
             <Stack spacing={1.5} sx={{ mt: 2 }}>
               {pendingPayments.map((payment) => (
                 <Box key={payment.id} sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
-                  <Typography fontWeight={800}>Registration #{payment.registrationId}</Typography>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="space-between">
+                    <Box>
+                      <Typography fontWeight={800}>Registration #{payment.registrationId}</Typography>
+                      <Typography color="text.secondary">
+                        {payment.payerName ?? "Participant"} · {payment.payerEmail ?? "email unavailable"} · {formatMoney(payment.totalAmount)}
+                      </Typography>
+                    </Box>
+                    <Chip label={payment.verificationStatus.replaceAll("_", " ")} color={payment.verificationStatus === "CONFIRMED" ? "success" : payment.verificationStatus === "PAYMENT_REJECTED" ? "error" : "warning"} />
+                  </Stack>
                   <Typography color="text.secondary">
                     {payment.method} · user ref {payment.userTransactionId} · generated ref {payment.generatedReference}
                   </Typography>
-                  <Button variant="contained" sx={{ mt: 1 }} onClick={() => handleConfirm(payment.id)}>
-                    Confirm payment
-                  </Button>
+                  {payment.proofFileUrl ? (
+                    <Typography sx={{ mt: 1 }}>
+                      Proof:{" "}
+                      <Box component="a" href={payment.proofFileUrl} target="_blank" rel="noreferrer" sx={{ color: "primary.main", fontWeight: 700 }}>
+                        {payment.proofFileUrl}
+                      </Box>
+                    </Typography>
+                  ) : null}
+                  {payment.rejectionReason ? <Alert severity="error" sx={{ mt: 1 }}>{payment.rejectionReason}</Alert> : null}
+                  {payment.verificationStatus === "PENDING_ADMIN_VERIFICATION" ? (
+                    <Grid container spacing={1.5} sx={{ mt: 0.5 }}>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Admin transaction ID / bank reference"
+                          value={adminTransactionIds[payment.id] ?? ""}
+                          onChange={(e) => setAdminTransactionIds((current) => ({ ...current, [payment.id]: e.target.value }))}
+                        />
+                      </Grid>
+                      <Grid item xs={12} md={6}>
+                        <TextField
+                          fullWidth
+                          label="Rejection reason"
+                          value={rejectionReasons[payment.id] ?? ""}
+                          onChange={(e) => setRejectionReasons((current) => ({ ...current, [payment.id]: e.target.value }))}
+                        />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                          <Button variant="contained" onClick={() => handleConfirm(payment.id)}>
+                            Confirm payment
+                          </Button>
+                          <Button color="error" variant="outlined" onClick={() => handleReject(payment.id)}>
+                            Reject payment
+                          </Button>
+                        </Stack>
+                      </Grid>
+                    </Grid>
+                  ) : null}
                 </Box>
               ))}
               {!pendingPayments.length ? <Typography color="text.secondary">No pending payments.</Typography> : null}
@@ -138,6 +238,28 @@ export default function AdminPage() {
           </Paper>
         </Grid>
       </Grid>
+      {event ? (
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h5">Exports</Typography>
+          <Typography color="text.secondary" sx={{ mt: 1 }}>
+            Download operational CSVs for committee reporting and launch reconciliation.
+          </Typography>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 2 }}>
+            <Button component="a" href={exportCsvUrl(event.id, "registrations")} target="_blank" rel="noreferrer" variant="outlined">
+              Registrations CSV
+            </Button>
+            <Button component="a" href={exportCsvUrl(event.id, "finance")} target="_blank" rel="noreferrer" variant="outlined">
+              Finance CSV
+            </Button>
+            <Button component="a" href={exportCsvUrl(event.id, "corporate-orders")} target="_blank" rel="noreferrer" variant="outlined">
+              Corporate CSV
+            </Button>
+            <Button component="a" href={exportCsvUrl(event.id, "inventory")} target="_blank" rel="noreferrer" variant="outlined">
+              Inventory CSV
+            </Button>
+          </Stack>
+        </Paper>
+      ) : null}
       <Paper sx={{ p: 3 }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between">
           <Box>

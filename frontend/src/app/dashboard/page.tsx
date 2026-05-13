@@ -11,6 +11,29 @@ function formatMoney(cents: number) {
   return new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" }).format(cents / 100);
 }
 
+function paymentState(registration: RegistrationDetail) {
+  if (registration.paymentStatus === "CONFIRMED") {
+    return {
+      color: "success" as const,
+      title: "Payment confirmed",
+      nextStep: "Your pickup code is available. Bring the code or QR display when collecting shirts.",
+    };
+  }
+  if (registration.paymentStatus === "PAYMENT_REJECTED") {
+    const reason = registration.paymentAttempts.find((attempt) => attempt.rejectionReason)?.rejectionReason;
+    return {
+      color: "error" as const,
+      title: "Payment needs attention",
+      nextStep: reason ? `Admin note: ${reason}` : "Please check your payment reference or contact the Terry Fox Run team.",
+    };
+  }
+  return {
+    color: "warning" as const,
+    title: "Waiting for payment confirmation",
+    nextStep: "The admin team will verify the PayNow or bank-transfer record before pickup codes are released.",
+  };
+}
+
 function DashboardContent() {
   const searchParams = useSearchParams();
   const [registrations, setRegistrations] = useState<RegistrationDetail[]>([]);
@@ -35,6 +58,14 @@ function DashboardContent() {
         {(registrations.length ? registrations : []).map((registration) => (
           <Grid item xs={12} key={registration.id}>
             <Paper sx={{ p: 3 }}>
+              {(() => {
+                const state = paymentState(registration);
+                return (
+                  <Alert severity={state.color} sx={{ mb: 2 }}>
+                    <strong>{state.title}.</strong> {state.nextStep}
+                  </Alert>
+                );
+              })()}
               <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between">
                 <Box>
                   <Typography variant="h5">{registration.eventName}</Typography>
@@ -61,7 +92,7 @@ function DashboardContent() {
                         </Box>
                       </Stack>
                       <Typography sx={{ mt: 2 }}>
-                        Pickup code: <strong>{registration.paymentStatus === "CONFIRMED" ? participant.pickupCode : "Available after confirmation"}</strong>
+                        Pickup code: <strong>{registration.paymentStatus === "CONFIRMED" ? participant.pickupCode : "Released after confirmation"}</strong>
                       </Typography>
                       <Typography color="text.secondary">
                         T-shirt: {participant.tshirtQty ? `${participant.tshirtQty} x ${participant.tshirtSize}` : "No shirt selected"}

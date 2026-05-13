@@ -1,6 +1,6 @@
 "use client";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8080";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8080";
 
 export type EventDto = {
   id: number;
@@ -100,7 +100,13 @@ export type PaymentAttempt = {
   generatedReference: string;
   userTransactionId: string;
   adminTransactionId?: string;
+  rejectionReason?: string;
+  proofFileUrl?: string;
   verificationStatus: string;
+  eventId?: number;
+  payerName?: string;
+  payerEmail?: string;
+  totalAmount?: number;
   submittedAt?: string;
   verifiedAt?: string;
 };
@@ -201,8 +207,17 @@ export function getMyRegistrations() {
   return api<RegistrationDetail[]>("/api/registrations/me");
 }
 
+export function getPaymentAttempts(filters: { status?: string; method?: "PAYNOW" | "BANK_TRANSFER" | ""; eventId?: number } = {}) {
+  const params = new URLSearchParams();
+  if (filters.status) params.set("status", filters.status);
+  if (filters.method) params.set("method", filters.method);
+  if (filters.eventId) params.set("eventId", String(filters.eventId));
+  const query = params.toString();
+  return api<PaymentAttempt[]>(`/api/admin/payment-attempts${query ? `?${query}` : ""}`);
+}
+
 export function getPendingPayments() {
-  return api<PaymentAttempt[]>("/api/admin/payment-attempts?status=PENDING_ADMIN_VERIFICATION");
+  return getPaymentAttempts({ status: "PENDING_ADMIN_VERIFICATION" });
 }
 
 export function confirmPayment(paymentAttemptId: number, adminTransactionId: string) {
@@ -210,6 +225,17 @@ export function confirmPayment(paymentAttemptId: number, adminTransactionId: str
     method: "POST",
     body: JSON.stringify({ adminTransactionId, verifiedBy: "local-admin" }),
   });
+}
+
+export function rejectPayment(paymentAttemptId: number, rejectionReason: string) {
+  return api<PaymentAttempt>(`/api/admin/payment-attempts/${paymentAttemptId}/reject`, {
+    method: "POST",
+    body: JSON.stringify({ rejectionReason, verifiedBy: "local-admin" }),
+  });
+}
+
+export function exportCsvUrl(eventId: number, exportType: "registrations" | "finance" | "corporate-orders" | "inventory") {
+  return `${API_BASE_URL}/api/events/${eventId}/exports/${exportType}.csv`;
 }
 
 export function getInventory(eventId: number) {

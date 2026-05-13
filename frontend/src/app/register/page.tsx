@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   Alert,
   Box,
@@ -45,6 +46,7 @@ const emptyParticipant = (categoryId = 0): ParticipantForm => ({
 });
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [event, setEvent] = useState<EventDto | null>(null);
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [payer, setPayer] = useState({
@@ -87,18 +89,40 @@ export default function RegisterPage() {
     setParticipants((current) => current.map((participant, currentIndex) => (currentIndex === index ? { ...participant, ...patch } : participant)));
   }
 
+  function validateRegistration() {
+    const requiredPayerFields = [
+      ["name", payer.name],
+      ["email address", payer.email],
+      ["NRIC / Passport / FIN", payer.identity],
+      ["Singapore address", payer.address],
+      ["blood type", payer.bloodType],
+    ];
+    const missing = requiredPayerFields.find(([, value]) => !String(value).trim());
+    if (missing) return `Please enter the payer ${missing[0]}.`;
+    if (!payer.email.includes("@")) return "Please enter a valid payer email address.";
+    if (!participants.length) return "Please add at least one participant.";
+    const missingCategoryIndex = participants.findIndex((participant) => !participant.categoryId);
+    if (missingCategoryIndex >= 0) return `Please choose a category for participant ${missingCategoryIndex + 1}.`;
+    const negativeShirtIndex = participants.findIndex((participant) => Number(participant.tshirtQty || 0) < 0);
+    if (negativeShirtIndex >= 0) return `T-shirt quantity cannot be negative for participant ${negativeShirtIndex + 1}.`;
+    if (Number(donationAmount || 0) < 0) return "Donation amount cannot be negative.";
+    if (!indemnityAccepted) return "Please accept the indemnity and PDPA consent before checkout.";
+    return "";
+  }
+
   function toParticipantInput(participant: ParticipantForm, index: number): ParticipantInput {
     const fallbackName = index === 0 ? payer.name : `Guest ${index + 1}`;
+    const fallbackPhone = participant.phone || "Optional phone not provided";
     return {
       categoryId: participant.categoryId || categories[0]?.id || 1,
       name: participant.name || fallbackName,
       email: participant.email || payer.email,
-      phone: participant.phone || "Not provided",
-      emergencyContactName: "Not provided",
-      emergencyContactPhone: participant.phone || "Not provided",
+      phone: fallbackPhone,
+      emergencyContactName: "Optional emergency contact not collected",
+      emergencyContactPhone: fallbackPhone,
       dob: "1900-01-01",
-      gender: "Not provided",
-      address: payer.address || "Not provided",
+      gender: "Optional gender not collected",
+      address: payer.address,
       nricLast4: payer.identity.slice(-4) || "NA",
       medicalNotes: "",
       tshirtSize: participant.tshirtQty > 0 ? participant.tshirtSize : undefined,
@@ -110,6 +134,11 @@ export default function RegisterPage() {
   async function handleCreateRegistration() {
     if (!event) {
       setError("Event details are not loaded yet.");
+      return;
+    }
+    const validationError = validateRegistration();
+    if (validationError) {
+      setError(validationError);
       return;
     }
     setError("");
@@ -137,6 +166,10 @@ export default function RegisterPage() {
 
   async function handleSubmitPayment() {
     if (!created) return;
+    if (!transactionId.trim()) {
+      setError("Please enter the transaction ID or payment reference before submitting.");
+      return;
+    }
     setError("");
     try {
       await submitPayment(created.registrationId, {
@@ -144,7 +177,7 @@ export default function RegisterPage() {
         userTransactionId: transactionId,
         proofFileUrl: proofFileUrl || undefined,
       });
-      setMessage("Payment submitted. Status is now Waiting for Payment Confirmation.");
+      router.push(`/confirmation?registrationId=${created.registrationId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Payment submission failed.");
     }
@@ -187,7 +220,7 @@ export default function RegisterPage() {
               <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }} justifyContent="space-between">
                 <Box>
                   <Typography variant="h5">Participants</Typography>
-                  <Typography color="text.secondary">Category is per participant. Extra participant details can stay light for v1.</Typography>
+                  <Typography color="text.secondary">Category is required per participant. Name, email, and phone can stay light for added participants.</Typography>
                 </Box>
                 <Button variant="outlined" onClick={() => setParticipants([...participants, emptyParticipant(categories[0]?.id ?? 0)])}>
                   Add participant
@@ -239,6 +272,7 @@ export default function RegisterPage() {
                           type="number"
                           label="T-shirt quantity"
                           value={participant.tshirtQty}
+                          inputProps={{ min: 0 }}
                           onChange={(e) => updateParticipant(index, { tshirtQty: Math.max(0, Number(e.target.value)) })}
                         />
                       </Grid>
@@ -258,6 +292,7 @@ export default function RegisterPage() {
                 type="number"
                 label="Additional donation"
                 value={donationAmount}
+                inputProps={{ min: 0 }}
                 onChange={(e) => setDonationAmount(Math.max(0, Number(e.target.value)))}
                 sx={{ mt: 2 }}
               />
