@@ -57,6 +57,14 @@ cd frontend
 npm run build
 ```
 
+Run the mocked browser smoke tests:
+
+```bash
+cd frontend
+npx playwright install chromium
+npm run test:smoke
+```
+
 Run the production build locally:
 
 ```bash
@@ -80,5 +88,5 @@ Before committing launch-prep changes:
 ```bash
 cd backend && mvn test
 cd ../frontend && npm run build
+cd ../frontend && npm run test:smoke
 ```
-

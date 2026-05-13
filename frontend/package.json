@@ -6,7 +6,8 @@
     "dev": "NODE_OPTIONS=--no-experimental-webstorage next dev",
     "build": "NODE_OPTIONS=--no-experimental-webstorage next build",
     "start": "NODE_OPTIONS=--no-experimental-webstorage next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:smoke": "playwright test"
   },
   "dependencies": {
     "@auth0/nextjs-auth0": "^4.0.0",
@@ -25,7 +26,9 @@
     "zod": "^3.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@eslint/eslintrc": "^3",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
