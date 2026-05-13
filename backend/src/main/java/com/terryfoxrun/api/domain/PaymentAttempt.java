@@ -22,6 +22,7 @@ public class PaymentAttempt {
     private String proofFileUrl;
     private String verificationStatus;
     private String adminTransactionId;
+    private String rejectionReason;
     private String verifiedBy;
     private LocalDateTime submittedAt;
     private LocalDateTime verifiedAt;
@@ -84,6 +85,14 @@ public class PaymentAttempt {
 
     public void setAdminTransactionId(String adminTransactionId) {
         this.adminTransactionId = adminTransactionId;
+    }
+
+    public String getRejectionReason() {
+        return rejectionReason;
+    }
+
+    public void setRejectionReason(String rejectionReason) {
+        this.rejectionReason = rejectionReason;
     }
 
     public String getVerifiedBy() {

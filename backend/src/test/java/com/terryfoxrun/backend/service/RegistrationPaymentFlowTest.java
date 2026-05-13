@@ -18,6 +18,7 @@ import com.terryfoxrun.api.repo.InventoryMovementRepository;
 import com.terryfoxrun.api.repo.PaymentAttemptRepository;
 import com.terryfoxrun.api.repo.RegistrationRepository;
 import com.terryfoxrun.api.repo.ShirtInventoryRepository;
+import com.terryfoxrun.api.service.email.LocalEmailService;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -56,6 +57,9 @@ class RegistrationPaymentFlowTest {
     @Autowired
     private PaymentService paymentService;
 
+    @Autowired
+    private LocalEmailService localEmailService;
+
     private Event event;
     private Category category;
 
@@ -69,6 +73,7 @@ class RegistrationPaymentFlowTest {
                 25_00));
         category = categoryRepository.save(Category.create(event, "5K Fun Run", 1));
         shirtInventoryRepository.save(ShirtInventory.create(event, "classic", "M", 40));
+        localEmailService.clear();
     }
 
     @Test
@@ -168,5 +173,61 @@ class RegistrationPaymentFlowTest {
         assertThat(movements).hasSize(1);
         assertThat(movements.get(0).getQuantityDelta()).isEqualTo(-1);
         assertThat(movements.get(0).getReason()).isEqualTo("REGISTRATION_PAYMENT_CONFIRMED");
+        assertThat(localEmailService.sentEmails())
+                .extracting(email -> email.template())
+                .contains("pending-payment", "payment-confirmed");
+    }
+
+    @Test
+    void rejectingManualPaymentMarksRegistrationRejectedAndDoesNotMoveInventory() {
+        Registration registration = registrationService.create("auth0|mei", new RegistrationCreateRequest(
+                event.getId(),
+                "Mei Wong",
+                "mei@example.com",
+                "S1111111C",
+                "3 Run Road, Singapore",
+                "B+",
+                List.of(new ParticipantInput(
+                        category.getId(),
+                        "Mei Wong",
+                        "mei@example.com",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "",
+                        "3 Run Road, Singapore",
+                        "111C",
+                        "B+",
+                        "M",
+                        "classic",
+                        1)),
+                0,
+                null,
+                true,
+                null,
+                null));
+        PaymentAttempt attempt = paymentService.submitManualPayment(
+                registration.getId(),
+                PaymentMethod.PAYNOW,
+                "PAYNOW-REJECT-001",
+                "unclear proof");
+
+        paymentService.rejectPayment(attempt.getId(), "wrong transfer amount", "admin@example.com");
+
+        Registration saved = registrationRepository.findById(registration.getId()).orElseThrow();
+        PaymentAttempt savedAttempt = paymentAttemptRepository.findById(attempt.getId()).orElseThrow();
+        ShirtInventory stock = shirtInventoryRepository.findByEventIdAndTypeAndSize(event.getId(), "classic", "M")
+                .orElseThrow();
+
+        assertThat(saved.getStatus()).isEqualTo("PAYMENT_REJECTED");
+        assertThat(saved.getPaymentStatus()).isEqualTo("PAYMENT_REJECTED");
+        assertThat(savedAttempt.getVerificationStatus()).isEqualTo("PAYMENT_REJECTED");
+        assertThat(savedAttempt.getRejectionReason()).isEqualTo("wrong transfer amount");
+        assertThat(stock.getQuantityAvailable()).isEqualTo(40);
+        assertThat(inventoryMovementRepository.findByRegistrationId(saved.getId())).isEmpty();
+        assertThat(localEmailService.sentEmails())
+                .extracting(email -> email.template())
+                .contains("pending-payment", "payment-rejected");
     }
 }

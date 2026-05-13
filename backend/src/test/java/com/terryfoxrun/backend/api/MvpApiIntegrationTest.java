@@ -5,6 +5,7 @@ import com.terryfoxrun.api.domain.EventFormFieldConfig;
 import com.terryfoxrun.api.domain.EventSlideshowImage;
 import com.terryfoxrun.api.domain.PaymentAttempt;
 import com.terryfoxrun.api.dto.ParticipantInput;
+import com.terryfoxrun.api.dto.CorporateOrderRequest;
 import com.terryfoxrun.api.dto.PaymentSubmitRequest;
 import com.terryfoxrun.api.dto.RegistrationCreateRequest;
 import com.terryfoxrun.api.repo.EventFormFieldConfigRepository;
@@ -157,12 +158,102 @@ class MvpApiIntegrationTest {
                 .andExpect(jsonPath("$.participants", hasSize(1)))
                 .andExpect(jsonPath("$.paymentAttempts[0].verificationStatus").value("PENDING_ADMIN_VERIFICATION"));
 
-        mockMvc.perform(get("/api/admin/payment-attempts").param("status", "PENDING_ADMIN_VERIFICATION"))
+        mockMvc.perform(get("/api/admin/payment-attempts")
+                        .param("status", "PENDING_ADMIN_VERIFICATION")
+                        .param("method", "PAYNOW")
+                        .param("eventId", eventId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].registrationId").value(registrationId));
+                .andExpect(jsonPath("$[0].registrationId").value(registrationId))
+                .andExpect(jsonPath("$[0].payerName").value("Sam Tan"))
+                .andExpect(jsonPath("$[0].payerEmail").value("sam@example.com"))
+                .andExpect(jsonPath("$[0].totalAmount").value(4500))
+                .andExpect(jsonPath("$[0].proofFileUrl").value("https://example.com/proof.png"));
+
+        mockMvc.perform(post("/api/admin/payment-attempts/{id}/reject", paymentAttemptRepository.findAll().get(0).getId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "rejectionReason", "payment amount did not match",
+                                "verifiedBy", "admin@example.com"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.verificationStatus").value("PAYMENT_REJECTED"))
+                .andExpect(jsonPath("$.rejectionReason").value("payment amount did not match"));
 
         PaymentAttempt attempt = paymentAttemptRepository.findAll().get(0);
         assertThat(attempt.getUserTransactionId()).isEqualTo("PAYNOW-123");
+    }
+
+    @Test
+    void exportsRegistrationPaymentCorporateAndInventoryCsvs() throws Exception {
+        Long eventId = eventRepository.findFirstByCurrentTrue().orElseThrow().getId();
+        Long categoryId = categoryRepository.findByEvent(eventRepository.findFirstByCurrentTrue().orElseThrow()).get(0).getId();
+
+        RegistrationCreateRequest createRequest = new RegistrationCreateRequest(
+                eventId,
+                "Export User",
+                "export@example.com",
+                "S2222222D",
+                "22 Export Road, Singapore",
+                "AB+",
+                List.of(new ParticipantInput(
+                        categoryId,
+                        "Export User",
+                        "export@example.com",
+                        "81230000",
+                        "Emergency Contact",
+                        "87650000",
+                        "1995-01-01",
+                        "Prefer not to say",
+                        "22 Export Road, Singapore",
+                        "222D",
+                        null,
+                        "S",
+                        "adult",
+                        1)),
+                25_00,
+                null,
+                true,
+                null,
+                null);
+        mockMvc.perform(post("/api/registrations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createRequest)))
+                .andExpect(status().isOk());
+
+        CorporateOrderRequest corporateRequest = new CorporateOrderRequest(
+                eventId,
+                "Export Co",
+                "1 Corporate Way",
+                "202600001Z",
+                "Corporate Lead",
+                "lead@example.com",
+                "89990000",
+                List.of(new CorporateOrderRequest.Item("M", "adult", 5)));
+        mockMvc.perform(post("/api/corporate-orders")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(corporateRequest)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/api/events/{eventId}/exports/registrations.csv", eventId))
+                .andExpect(status().isOk())
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .contains("registration_id,payer_name,payer_email,total_amount,payment_status,created_at")
+                        .contains("Export User"));
+
+        mockMvc.perform(get("/api/events/{eventId}/exports/finance.csv", eventId))
+                .andExpect(status().isOk())
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .contains("payment_attempt_id,registration_id,payer_email,method,generated_reference,user_transaction_id,verification_status,total_amount"));
+
+        mockMvc.perform(get("/api/events/{eventId}/exports/corporate-orders.csv", eventId))
+                .andExpect(status().isOk())
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .contains("corporate_order_id,company_name,uen,contact_email,status,shirt_type,size,quantity")
+                        .contains("Export Co"));
+
+        mockMvc.perform(get("/api/events/{eventId}/exports/inventory.csv", eventId))
+                .andExpect(status().isOk())
+                .andExpect(result -> assertThat(result.getResponse().getContentAsString())
+                        .contains("shirt_type,size,quantity_available,quantity_reserved,quantity_sold"));
     }
 }

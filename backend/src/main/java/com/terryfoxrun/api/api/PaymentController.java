@@ -1,8 +1,10 @@
 package com.terryfoxrun.api.api;
 
 import com.terryfoxrun.api.domain.PaymentAttempt;
+import com.terryfoxrun.api.domain.PaymentMethod;
 import com.terryfoxrun.api.dto.PaymentAttemptDto;
 import com.terryfoxrun.api.dto.PaymentConfirmRequest;
+import com.terryfoxrun.api.dto.PaymentRejectRequest;
 import com.terryfoxrun.api.dto.PaymentSubmitRequest;
 import com.terryfoxrun.api.service.PaymentService;
 import jakarta.validation.Valid;
@@ -46,9 +48,20 @@ public class PaymentController {
                 request.verifiedBy())));
     }
 
+    @PostMapping("/admin/payment-attempts/{paymentAttemptId}/reject")
+    public ResponseEntity<PaymentAttemptDto> rejectPayment(@PathVariable Long paymentAttemptId,
+                                                           @Valid @RequestBody PaymentRejectRequest request) {
+        return ResponseEntity.ok(toDto(paymentService.rejectPayment(
+                paymentAttemptId,
+                request.rejectionReason(),
+                request.verifiedBy())));
+    }
+
     @GetMapping("/admin/payment-attempts")
-    public ResponseEntity<List<PaymentAttemptDto>> listPaymentAttempts(@RequestParam(required = false) String status) {
-        return ResponseEntity.ok(paymentService.listPaymentAttempts(status).stream()
+    public ResponseEntity<List<PaymentAttemptDto>> listPaymentAttempts(@RequestParam(required = false) String status,
+                                                                       @RequestParam(required = false) PaymentMethod method,
+                                                                       @RequestParam(required = false) Long eventId) {
+        return ResponseEntity.ok(paymentService.listPaymentAttempts(status, method, eventId).stream()
                 .map(this::toDto)
                 .toList());
     }
@@ -61,7 +74,13 @@ public class PaymentController {
                 attempt.getGeneratedReference(),
                 attempt.getUserTransactionId(),
                 attempt.getAdminTransactionId(),
+                attempt.getRejectionReason(),
+                attempt.getProofFileUrl(),
                 attempt.getVerificationStatus(),
+                attempt.getRegistration().getEvent().getId(),
+                attempt.getRegistration().getPayerName(),
+                attempt.getRegistration().getPayerEmail(),
+                attempt.getRegistration().getTotalAmount(),
                 attempt.getSubmittedAt() == null ? null : attempt.getSubmittedAt().toInstant(ZoneOffset.UTC),
                 attempt.getVerifiedAt() == null ? null : attempt.getVerifiedAt().toInstant(ZoneOffset.UTC));
     }

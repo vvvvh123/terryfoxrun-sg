@@ -11,9 +11,12 @@ import com.terryfoxrun.api.repo.PaymentAttemptRepository;
 import com.terryfoxrun.api.repo.PaymentRepository;
 import com.terryfoxrun.api.repo.RegistrationRepository;
 import com.terryfoxrun.api.repo.ShirtInventoryRepository;
+import com.terryfoxrun.api.service.email.EmailService;
+import com.terryfoxrun.api.service.storage.StorageService;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,19 +29,25 @@ public class PaymentService {
     private final ShirtInventoryRepository shirtInventoryRepository;
     private final InventoryMovementRepository inventoryMovementRepository;
     private final RegistrationService registrationService;
+    private final EmailService emailService;
+    private final StorageService storageService;
 
     public PaymentService(RegistrationRepository registrationRepository,
                           PaymentAttemptRepository paymentAttemptRepository,
                           PaymentRepository paymentRepository,
                           ShirtInventoryRepository shirtInventoryRepository,
                           InventoryMovementRepository inventoryMovementRepository,
-                          RegistrationService registrationService) {
+                          RegistrationService registrationService,
+                          EmailService emailService,
+                          StorageService storageService) {
         this.registrationRepository = registrationRepository;
         this.paymentAttemptRepository = paymentAttemptRepository;
         this.paymentRepository = paymentRepository;
         this.shirtInventoryRepository = shirtInventoryRepository;
         this.inventoryMovementRepository = inventoryMovementRepository;
         this.registrationService = registrationService;
+        this.emailService = emailService;
+        this.storageService = storageService;
     }
 
     @Transactional
@@ -50,7 +59,7 @@ public class PaymentService {
         attempt.setMethod(method);
         attempt.setGeneratedReference(registration.getGeneratedPaymentReference());
         attempt.setUserTransactionId(userTransactionId);
-        attempt.setProofFileUrl(proofFileUrl);
+        attempt.setProofFileUrl(storageService.normalizeProofReference(proofFileUrl));
         attempt.setVerificationStatus("PENDING_ADMIN_VERIFICATION");
         attempt.setSubmittedAt(LocalDateTime.now());
         paymentAttemptRepository.save(attempt);
@@ -58,15 +67,24 @@ public class PaymentService {
         registration.setStatus("WAITING_FOR_PAYMENT_CONFIRMATION");
         registration.setPaymentStatus("PENDING_ADMIN_VERIFICATION");
         registrationRepository.save(registration);
+        emailService.sendPendingPaymentEmail(registration);
         return attempt;
     }
 
     @Transactional(readOnly = true)
-    public List<PaymentAttempt> listPaymentAttempts(String verificationStatus) {
-        if (verificationStatus == null || verificationStatus.isBlank()) {
-            return paymentAttemptRepository.findAll();
-        }
-        return paymentAttemptRepository.findByVerificationStatusOrderBySubmittedAtAsc(verificationStatus);
+    public List<PaymentAttempt> listPaymentAttempts(String verificationStatus, PaymentMethod method, Long eventId) {
+        return paymentAttemptRepository.findAll().stream()
+                .filter(attempt -> verificationStatus == null || verificationStatus.isBlank()
+                        || Objects.equals(attempt.getVerificationStatus(), verificationStatus))
+                .filter(attempt -> method == null || attempt.getMethod() == method)
+                .filter(attempt -> eventId == null || Objects.equals(attempt.getRegistration().getEvent().getId(), eventId))
+                .sorted((left, right) -> {
+                    if (left.getSubmittedAt() == null && right.getSubmittedAt() == null) return 0;
+                    if (left.getSubmittedAt() == null) return 1;
+                    if (right.getSubmittedAt() == null) return -1;
+                    return left.getSubmittedAt().compareTo(right.getSubmittedAt());
+                })
+                .toList();
     }
 
     @Transactional
@@ -116,6 +134,28 @@ public class PaymentService {
         payment.setProviderId(adminTransactionId);
         payment.setCreatedAt(LocalDateTime.now());
         paymentRepository.save(payment);
+        emailService.sendPaymentConfirmedEmail(registration);
+
+        return paymentAttemptRepository.save(attempt);
+    }
+
+    @Transactional
+    public PaymentAttempt rejectPayment(Long paymentAttemptId, String rejectionReason, String verifiedBy) {
+        PaymentAttempt attempt = paymentAttemptRepository.findById(paymentAttemptId).orElseThrow();
+        Registration registration = attempt.getRegistration();
+        if ("CONFIRMED".equals(registration.getPaymentStatus())) {
+            throw new IllegalStateException("Confirmed payments cannot be rejected.");
+        }
+
+        attempt.setVerifiedBy(verifiedBy);
+        attempt.setVerificationStatus("PAYMENT_REJECTED");
+        attempt.setRejectionReason(rejectionReason);
+        attempt.setVerifiedAt(LocalDateTime.now());
+
+        registration.setStatus("PAYMENT_REJECTED");
+        registration.setPaymentStatus("PAYMENT_REJECTED");
+        registrationRepository.save(registration);
+        emailService.sendPaymentRejectedEmail(registration, rejectionReason);
 
         return paymentAttemptRepository.save(attempt);
     }

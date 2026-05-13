@@ -11,7 +11,13 @@ public record PaymentAttemptDto(
         String generatedReference,
         String userTransactionId,
         String adminTransactionId,
+        String rejectionReason,
+        String proofFileUrl,
         String verificationStatus,
+        Long eventId,
+        String payerName,
+        String payerEmail,
+        Integer totalAmount,
         Instant submittedAt,
         Instant verifiedAt
 ) {

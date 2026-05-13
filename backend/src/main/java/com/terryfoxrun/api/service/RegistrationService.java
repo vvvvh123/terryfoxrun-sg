@@ -213,7 +213,13 @@ public class RegistrationService {
                         attempt.getGeneratedReference(),
                         attempt.getUserTransactionId(),
                         attempt.getAdminTransactionId(),
+                        attempt.getRejectionReason(),
+                        attempt.getProofFileUrl(),
                         attempt.getVerificationStatus(),
+                        registration.getEvent().getId(),
+                        registration.getPayerName(),
+                        registration.getPayerEmail(),
+                        registration.getTotalAmount(),
                         attempt.getSubmittedAt() == null ? null : attempt.getSubmittedAt().toInstant(ZoneOffset.UTC),
                         attempt.getVerifiedAt() == null ? null : attempt.getVerifiedAt().toInstant(ZoneOffset.UTC)))
                 .toList();

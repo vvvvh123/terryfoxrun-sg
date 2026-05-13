@@ -36,5 +36,11 @@ public class ExportController {
                 .header("Content-Type", "text/csv")
                 .body(exportService.financeCsv(eventId));
     }
-}
 
+    @GetMapping("/inventory.csv")
+    public ResponseEntity<byte[]> inventoryCsv(@PathVariable Long eventId) {
+        return ResponseEntity.ok()
+                .header("Content-Type", "text/csv")
+                .body(exportService.inventoryCsv(eventId));
+    }
+}
