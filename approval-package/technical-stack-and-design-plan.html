@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Terry Fox Run Singapore Technical Stack and Design Plan</title>
+    <style>
+      :root {
+        --red: #d71920;
+        --navy: #0b1f3a;
+        --ink: #1b1f2a;
+        --muted: #5f6978;
+        --line: #dce3ed;
+        --soft: #f6f8fb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: #eef2f7;
+        font-family: Arial, Helvetica, sans-serif;
+        line-height: 1.55;
+      }
+
+      .page {
+        max-width: 980px;
+        margin: 32px auto;
+        padding: 54px 64px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: 0 18px 50px rgba(11, 31, 58, 0.12);
+      }
+
+      .eyebrow {
+        color: var(--red);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin: 12px 0 10px;
+        color: var(--navy);
+        font-size: 42px;
+        line-height: 1;
+      }
+
+      h2 {
+        margin: 42px 0 12px;
+        padding-top: 18px;
+        color: var(--navy);
+        border-top: 1px solid var(--line);
+        font-size: 25px;
+        line-height: 1.15;
+      }
+
+      h3 {
+        margin: 24px 0 8px;
+        color: var(--navy);
+        font-size: 18px;
+      }
+
+      .summary {
+        margin: 28px 0;
+        padding: 22px;
+        color: #283349;
+        background: var(--soft);
+        border-left: 5px solid var(--red);
+        border-radius: 0 8px 8px 0;
+      }
+
+      ul {
+        padding-left: 24px;
+      }
+
+      li {
+        margin: 7px 0;
+      }
+
+      code {
+        padding: 2px 5px;
+        background: #edf2f7;
+        border-radius: 4px;
+      }
+
+      @media print {
+        body {
+          background: #fff;
+        }
+
+        .page {
+          margin: 0;
+          max-width: none;
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .page {
+          margin: 0;
+          padding: 30px 22px;
+          border: 0;
+          border-radius: 0;
+        }
+
+        h1 {
+          font-size: 34px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <article class="page">
+      <div class="eyebrow">Technical Plan</div>
+      <h1>Terry Fox Run Singapore Technical Stack and Design Plan</h1>
+
+      <div class="summary">
+        Use a managed, conservative stack: Next.js + Material UI frontend, Spring Boot Java backend, PostgreSQL, Auth0, manual PayNow/bank-transfer reconciliation, admin-managed media, and hosted email. The architecture prioritizes mobile UX, yearly reuse, auditability, and low operational burden.
+      </div>
+
+      <h2>Recommended Stack</h2>
+      <h3>Frontend</h3>
+      <ul>
+        <li>Next.js App Router with TypeScript.</li>
+        <li>Material UI with Emotion styling.</li>
+        <li>React Hook Form + Zod for forms and validation.</li>
+        <li>TanStack Query for backend REST API data fetching.</li>
+        <li>Recharts for fundraising and inventory trend charts.</li>
+        <li>QR code display and browser camera QR scanning for pickup workflows.</li>
+        <li>Use MUI only; remove accidental Tailwind setup.</li>
+      </ul>
+
+      <h3>Backend</h3>
+      <ul>
+        <li>Java 21 and Spring Boot 3.x.</li>
+        <li>REST JSON APIs.</li>
+        <li>Spring Security OAuth2 Resource Server validating Auth0 JWTs.</li>
+        <li>Spring Data JPA / Hibernate with PostgreSQL.</li>
+        <li>Flyway migrations and Jakarta Bean Validation.</li>
+        <li>Spring scheduled jobs for payment reminders, email retries, and admin summaries.</li>
+        <li>Spring Actuator and structured logs for observability.</li>
+      </ul>
+
+      <h3>Database, Storage, Auth, Hosting, Email</h3>
+      <ul>
+        <li>PostgreSQL, recommended on Supabase Singapore region.</li>
+        <li>Supabase Storage or equivalent object storage for proof uploads, slideshow images, indemnity files, and exports.</li>
+        <li>Auth0 Universal Login with participant, admin, and volunteer roles.</li>
+        <li>Frontend on Vercel; backend on Fly.io Singapore; database/storage on Supabase Singapore.</li>
+        <li>Postmark or SendGrid for email, with SPF, DKIM, and DMARC configured before launch.</li>
+      </ul>
+
+      <h2>Key Technical Decisions</h2>
+      <h3>Payments</h3>
+      <ul>
+        <li>Initial launch uses manual PayNow and bank-transfer verification.</li>
+        <li>System generates a unique order/payment reference.</li>
+        <li>User submits transaction/payment ID and optional proof upload after clicking "I've paid."</li>
+        <li>Admin verifies payment, records final transaction ID, and marks order paid.</li>
+        <li>Fundraising tracker and pickup QR/code depend on admin-confirmed payments.</li>
+      </ul>
+
+      <h3>Configurable Events</h3>
+      <ul>
+        <li>Admin configures current event, event detail page, categories, form fields, indemnity text, T-shirt sizes, inventory, payment instructions, and homepage slideshow.</li>
+        <li>Homepage shows current-event overview only; event detail page carries full details.</li>
+        <li>Slideshow supports uploaded images plus blurbs/captions.</li>
+        <li>Past event and transaction history remain available across years.</li>
+      </ul>
+
+      <h3>Registration, Corporate, Inventory, Admin</h3>
+      <ul>
+        <li>Payer account is required; payer fields are admin-configurable.</li>
+        <li>Additional participant details are optional by default; category is per participant.</li>
+        <li>Corporate packages, shirt allocations, payment proof, and status history are stored and exportable.</li>
+        <li>Every inventory change creates an inventory movement record for daily trend charts.</li>
+        <li>Admin portal covers payment verification, slideshow, form fields, categories, packages, inventory, pickup, exports, mass email, and dashboards.</li>
+      </ul>
+
+      <h2>Data and Interfaces</h2>
+      <ul>
+        <li><code>EventSlideshowImage</code>: image URL, blurb, display order, active flag.</li>
+        <li><code>EventFormFieldConfig</code>: field key, label, required/optional/hidden, applies-to scope.</li>
+        <li><code>PaymentAttempt</code>: method, generated reference, user transaction ID, proof file URL, verification status.</li>
+        <li><code>InventoryMovement</code>: event, size, type, quantity delta, reason, linked order, timestamp.</li>
+        <li><code>CorporatePackage</code>: package name, price, shirt allocation rules.</li>
+        <li><code>EmailCampaign</code>: audience, subject, body, sent status, created by.</li>
+      </ul>
+
+      <h2>Test Plan</h2>
+      <ul>
+        <li>Unit tests for pricing, donations, shirt quantities, payment transitions, and inventory movements.</li>
+        <li>PostgreSQL/Testcontainers integration tests for registration, corporate orders, payment verification, and pickup.</li>
+        <li>Playwright end-to-end tests for mobile registration, proof submission, admin verification, My Events, pickup, and slideshow updates.</li>
+        <li>Email provider sandbox tests, role/permission tests, and accessibility checks.</li>
+      </ul>
+    </article>
+  </body>
+</html>

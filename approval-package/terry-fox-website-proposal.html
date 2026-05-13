@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Terry Fox Run Singapore Website Proposal</title>
+    <style>
+      :root {
+        --red: #d71920;
+        --navy: #0b1f3a;
+        --ink: #1b1f2a;
+        --muted: #5f6978;
+        --line: #dce3ed;
+        --soft: #f6f8fb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: #eef2f7;
+        font-family: Arial, Helvetica, sans-serif;
+        line-height: 1.55;
+      }
+
+      .page {
+        max-width: 980px;
+        margin: 32px auto;
+        padding: 54px 64px;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        box-shadow: 0 18px 50px rgba(11, 31, 58, 0.12);
+      }
+
+      .eyebrow {
+        color: var(--red);
+        font-size: 13px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin: 12px 0 10px;
+        color: var(--navy);
+        font-size: 42px;
+        line-height: 1;
+      }
+
+      h2 {
+        margin: 42px 0 12px;
+        padding-top: 18px;
+        color: var(--navy);
+        border-top: 1px solid var(--line);
+        font-size: 25px;
+        line-height: 1.15;
+      }
+
+      h3 {
+        margin: 24px 0 8px;
+        color: var(--navy);
+        font-size: 18px;
+      }
+
+      .meta {
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .summary {
+        margin: 28px 0;
+        padding: 22px;
+        color: #283349;
+        background: var(--soft);
+        border-left: 5px solid var(--red);
+        border-radius: 0 8px 8px 0;
+      }
+
+      ul,
+      ol {
+        padding-left: 24px;
+      }
+
+      li {
+        margin: 7px 0;
+      }
+
+      a {
+        color: var(--red);
+        font-weight: 700;
+      }
+
+      .decision-box {
+        margin: 22px 0;
+        padding: 18px 20px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .comment {
+        margin: 12px 0 18px;
+        min-height: 64px;
+        border: 1px dashed #aeb9c8;
+        border-radius: 8px;
+        background: #fbfcfe;
+      }
+
+      .tag {
+        display: inline-block;
+        margin-right: 8px;
+        padding: 4px 9px;
+        color: var(--navy);
+        background: #edf3f8;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+
+      @media print {
+        body {
+          background: #fff;
+        }
+
+        .page {
+          margin: 0;
+          max-width: none;
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+        }
+      }
+
+      @media (max-width: 760px) {
+        .page {
+          margin: 0;
+          padding: 30px 22px;
+          border: 0;
+          border-radius: 0;
+        }
+
+        h1 {
+          font-size: 34px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <article class="page">
+      <div class="eyebrow">Executive Committee Proposal</div>
+      <h1>Terry Fox Run Singapore Website Proposal</h1>
+      <p class="meta">Purpose: Initial approval of website direction, feature scope, and implementation priorities</p>
+
+      <div class="summary">
+        We recommend continuing with the product direction developed so far: a Terry Fox Run Singapore website that brings event registration, optional T-shirt purchase, donations, corporate shirt orders, participant confirmations, pickup QR codes, announcements, and admin operations under our own control.
+      </div>
+
+      <h2>Goals and Success Criteria</h2>
+      <p>The website should help the committee keep more fundraising value, make participant registration clearer, support volunteer operations, and make future yearly runs easier to launch.</p>
+      <ul>
+        <li>Participants can complete registration on mobile without confusion.</li>
+        <li>One payer can register multiple participants in a single checkout.</li>
+        <li>Shirt purchases and donations are clearly separated from run participation.</li>
+        <li>T-shirt pickup can be handled by QR code or manual code.</li>
+        <li>Admins can configure each event without changing code.</li>
+      </ul>
+
+      <h2>Proposed Page Map</h2>
+      <h3>Public Pages</h3>
+      <ul>
+        <li><strong>Home:</strong> Event overview, mission, Register CTA, Donate CTA, T-shirt preview, route highlights, sponsors, FAQ entry point.</li>
+        <li><strong>Event Details:</strong> 5K and 10K information, schedule, venue, registration close date, pickup dates, FAQ.</li>
+        <li><strong>Register:</strong> Individual registration with support for adding multiple participants.</li>
+        <li><strong>Corporate Orders:</strong> Company shirt-order form for bulk shirt quantities, with offline payment follow-up.</li>
+        <li><strong>Confirmation:</strong> Registration summary, payment status, receipt information, pickup QR/code, next steps.</li>
+        <li><strong>Past Runs:</strong> Archive of previous runs, highlights, photos, and links.</li>
+      </ul>
+      <h3>Participant and Admin Areas</h3>
+      <ul>
+        <li><strong>Dashboard:</strong> My registrations, QR/pickup code, T-shirt order details, donation details, receipts, announcements.</li>
+        <li><strong>Admin:</strong> Event setup, field configuration, inventory, registrations, corporate orders, pickup, announcements, exports, and overview metrics.</li>
+      </ul>
+
+      <h2>Registration Model</h2>
+      <p>The individual registration flow should support one payer registering multiple participants. Per participant, configurable fields can include name, email, phone, emergency contact, date of birth, gender, address, residency or identity information, medical notes, and category.</p>
+      <p>The admin should be able to set each field as required, optional, or hidden per event. Run participation itself should not require a T-shirt purchase.</p>
+      <p>For v1 payments, individual registrations should support PayNow and bank transfer. Both methods are manually verified by admins before the registration is fully confirmed.</p>
+
+      <h2>T-Shirt Purchase and Pickup Model</h2>
+      <p>T-shirt purchase should be optional. The default T-shirt price is SGD 35 per shirt, regardless of adult or kids size.</p>
+      <p>Default sizes are Adult XS to XXXL and Kids XS to L. Admins should be able to configure which sizes are available for each event and set inventory quantities.</p>
+      <ul>
+        <li>After successful payment, each participant or order receives a unique QR code and short pickup code.</li>
+        <li>The QR/code appears in the confirmation email and participant dashboard.</li>
+        <li>Volunteers can scan the QR code or enter the code manually.</li>
+        <li>The system marks the shirt as collected and prevents duplicate collection.</li>
+        <li>T-shirt size changes are not allowed after purchase.</li>
+        <li>A designated collector can use the participant's QR confirmation slip to collect on their behalf.</li>
+      </ul>
+
+      <h2>Donation Model</h2>
+      <p>Donation should be encouraged but optional. Suggested presets are SGD 20, SGD 50, and SGD 100, with a custom amount option.</p>
+
+      <h2>Corporate Order Model</h2>
+      <p>Corporate orders should be shirt-only for v1. They should not require individual runner details.</p>
+      <ul>
+        <li>Collect company name, company address, UEN, contact name, contact email, contact phone, and shirt quantities.</li>
+        <li>Skip online payment and follow up separately with invoice or bank transfer instructions.</li>
+        <li>Allow admins to view, update status, and export corporate orders.</li>
+      </ul>
+
+      <h2>Admin Capabilities</h2>
+      <p>Required roles are Admin, Volunteer, and Participant.</p>
+      <ul>
+        <li>Admins can manage event setup, field requirements, categories, inventory, announcements, corporate orders, pickup, reports, and exports.</li>
+        <li>Volunteers can use the pickup scanning and manual code entry tool.</li>
+        <li>Participants can access their own dashboard and registrations.</li>
+      </ul>
+
+      <h2>Yearly Reuse Model</h2>
+      <p>The website should be designed around event configuration rather than one-off hardcoded pages. Each yearly event can have its own dates, locations, categories, field rules, donation presets, shirt price, inventory, homepage copy, and visual assets.</p>
+      <p>The organizing team should be able to clone the previous year's event, update details, set inventory, and open registration. Past events should remain available on a Past Runs page.</p>
+
+      <h2>Reference Facts From Existing Public Material</h2>
+      <ul>
+        <li>The 2025 Singapore listing describes the run as taking place on 30 Nov 2025 at Angsana Green ECP at 7am, with 5km and 10km options and no entry fee.</li>
+        <li>The existing FAQ states that there are no race packs, bibs, timing chips, winners, or prizes.</li>
+        <li>The existing FAQ states that no T-shirt size exchanges are allowed.</li>
+        <li>The existing FAQ says a designated person can use the QR confirmation slip to collect a shirt.</li>
+      </ul>
+      <p>Sources: <a href="https://www.justrunlah.com/race/terry-fox-run-2025/">JustRunLah 2025 listing</a>, <a href="https://www.terryfoxrun.sg/faq2024">Terry Fox Run Singapore FAQ</a>, and <a href="https://reg5.events-sign-up.com/cgi-bin/registration/tfr2025/prereg.cgi">existing registration reference</a>.</p>
+
+      <h2>Decisions Requested From the Committee</h2>
+      <div class="decision-box">
+        <p><span class="tag">Decision</span>Approve the overall visual direction: red, white, black, dark blue, warm, modern, and event-focused.</p>
+        <div class="comment"></div>
+        <p><span class="tag">Decision</span>Approve MVP scope: public site, registration, optional shirts, optional donations, corporate orders, dashboard, admin, pickup, announcements, and exports.</p>
+        <div class="comment"></div>
+        <p><span class="tag">Decision</span>Approve PayNow and bank transfer as v1 payment methods, with manual admin verification.</p>
+        <div class="comment"></div>
+        <p><span class="tag">Decision</span>Approve corporate orders as shirt-only with offline payment follow-up.</p>
+        <div class="comment"></div>
+        <p><span class="tag">Decision</span>Approve pickup model: QR code plus manual code, no size exchanges, designated collector allowed.</p>
+        <div class="comment"></div>
+      </div>
+
+      <h2>Open Questions</h2>
+      <h3>Event Details</h3>
+      <ul>
+        <li>What is the confirmed 2026 event date?</li>
+        <li>What is the confirmed event venue?</li>
+        <li>What is the confirmed pickup venue and weekend?</li>
+      </ul>
+      <h3>Content and Branding</h3>
+      <ul>
+        <li>Do we have approved logo files, photography, and sponsor logos?</li>
+        <li>Who should approve final homepage and FAQ copy?</li>
+      </ul>
+      <h3>Operations and Policy</h3>
+      <ul>
+        <li>Who should have admin and volunteer pickup access?</li>
+        <li>Which email address or domain should send participant emails?</li>
+        <li>Do we need waiver or PDPA consent language in v1?</li>
+        <li>What refund or cancellation wording should appear?</li>
+      </ul>
+
+      <h2>Recommended Implementation Phases</h2>
+      <ol>
+        <li><strong>Phase 1:</strong> Approval, copy, assets, technical cleanup, final event facts, and technical stack confirmation.</li>
+        <li><strong>Phase 2:</strong> Public site, registration, PayNow/bank-transfer checkout instructions, payment proof submission, corporate form, pending emails, and dashboard basics.</li>
+        <li><strong>Phase 3:</strong> Admin portal, manual payment verification, inventory, pickup scanning, corporate packages/orders, mass email, exports, and event-day testing.</li>
+        <li><strong>Later:</strong> sponsor-a-participant, lucky draw, Stripe or other automated payment integration, SMS, advanced offline pickup sync, and analytics.</li>
+      </ol>
+
+      <h2>Technical Stack Summary</h2>
+      <p>The full technical stack is documented in <strong>technical-stack-and-design-plan.md</strong>.</p>
+      <ul>
+        <li><strong>Frontend:</strong> Next.js App Router, TypeScript, Material UI, React Hook Form, Zod, TanStack Query, Recharts, QR display/scanning libraries.</li>
+        <li><strong>Backend:</strong> Java 21, Spring Boot 3.x, REST APIs, Spring Security with Auth0 JWT validation, Spring Data JPA, PostgreSQL, Flyway, Actuator.</li>
+        <li><strong>Authentication:</strong> Auth0 Universal Login with participant, admin, and volunteer roles.</li>
+        <li><strong>Payments:</strong> manual PayNow and bank-transfer verification for launch.</li>
+        <li><strong>Storage:</strong> managed object storage for payment proof uploads, slideshow images, indemnity files, and exports.</li>
+        <li><strong>Hosting:</strong> Vercel frontend, Fly.io Singapore backend, and Supabase Singapore database/storage.</li>
+        <li><strong>Email:</strong> Postmark or SendGrid with SPF, DKIM, and DMARC configured before launch.</li>
+      </ul>
+    </article>
+  </body>
+</html>
