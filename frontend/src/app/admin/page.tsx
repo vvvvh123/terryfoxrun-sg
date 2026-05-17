@@ -31,12 +31,14 @@ import {
   rejectPayment,
   saveSlideshow,
 } from "@/lib/api";
+import { useAuth } from "@/components/AuthProvider";
 
 function formatMoney(cents?: number) {
   return new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" }).format((cents ?? 0) / 100);
 }
 
 export default function AdminPage() {
+  const { appRole, loading, user } = useAuth();
   const [event, setEvent] = useState<EventDto | null>(null);
   const [pendingPayments, setPendingPayments] = useState<PaymentAttempt[]>([]);
   const [inventory, setInventory] = useState<ShirtInventoryItem[]>([]);
@@ -62,8 +64,9 @@ export default function AdminPage() {
   }, [methodFilter, statusFilter]);
 
   useEffect(() => {
+    if (loading || !user || appRole !== "admin") return;
     loadAdmin().catch(() => setError("Start the backend to use admin tools."));
-  }, [loadAdmin]);
+  }, [appRole, loadAdmin, loading, user]);
 
   const metrics = useMemo(() => {
     const remaining = inventory.reduce((sum, item) => sum + Number(item.quantityAvailable || 0), 0);
@@ -123,6 +126,11 @@ export default function AdminPage() {
           Operating tools for manual payment verification, slideshow updates, exports, and inventory visibility.
         </Typography>
       </Box>
+      {!loading && (!user || appRole !== "admin") ? (
+        <Alert severity="warning">
+          Sign in with an admin account to use payment verification, exports, inventory, and slideshow tools.
+        </Alert>
+      ) : null}
       {error ? <Alert severity="warning">{error}</Alert> : null}
       {message ? <Alert severity="success">{message}</Alert> : null}
       <Grid container spacing={2}>

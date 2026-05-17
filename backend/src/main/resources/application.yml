@@ -15,10 +15,12 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
-
-auth0:
-  issuer: ${AUTH0_ISSUER:https://your-tenant.auth0.com/}
-  audience: ${AUTH0_AUDIENCE:https://api.terryfoxrun.sg/}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${SUPABASE_AUTH_ISSUER:https://lhpondhrhnjnimvyozdc.supabase.co/auth/v1}
+          jwk-set-uri: ${SUPABASE_AUTH_JWKS_URI:https://lhpondhrhnjnimvyozdc.supabase.co/auth/v1/.well-known/jwks.json}
 
 app:
   security:
@@ -28,7 +30,7 @@ app:
   payments:
     reference-prefix: ${PAYMENT_REFERENCE_PREFIX:TFR}
 
-# TODO: configure Auth0 issuer/audience, datasource, mail provider, and object storage.
+# TODO: configure Supabase Auth, datasource, mail provider, and object storage.
 
 management:
   endpoints:

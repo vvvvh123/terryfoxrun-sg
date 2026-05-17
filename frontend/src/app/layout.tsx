@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import ThemeRegistry from "@/components/ThemeRegistry";
 import SiteShell from "@/components/SiteShell";
+import { AuthProvider } from "@/components/AuthProvider";
 
 export const metadata: Metadata = {
   title: "Terry Fox Run Singapore",
@@ -17,7 +18,9 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <ThemeRegistry>
-          <SiteShell>{children}</SiteShell>
+          <AuthProvider>
+            <SiteShell>{children}</SiteShell>
+          </AuthProvider>
         </ThemeRegistry>
       </body>
     </html>

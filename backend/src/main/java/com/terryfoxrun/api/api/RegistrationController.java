@@ -7,6 +7,7 @@ import com.terryfoxrun.api.dto.RegistrationQuoteRequest;
 import com.terryfoxrun.api.dto.RegistrationQuoteResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,14 +29,14 @@ public class RegistrationController {
 
     @PostMapping
     public ResponseEntity<RegistrationCreateResponse> create(@Valid @RequestBody RegistrationCreateRequest request,
-                                                             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        String payer = userId != null ? userId : "anonymous";
+                                                             Authentication authentication) {
+        String payer = authentication != null ? authentication.getName() : "anonymous";
         return ResponseEntity.ok(registrationService.toCreateResponse(registrationService.create(payer, request)));
     }
 
     @GetMapping("/me")
-    public ResponseEntity<List<RegistrationDetailDto>> myRegistrations(@RequestHeader(value = "X-User-Id", required = false) String userId) {
-        String payer = userId != null ? userId : "anonymous";
+    public ResponseEntity<List<RegistrationDetailDto>> myRegistrations(Authentication authentication) {
+        String payer = authentication != null ? authentication.getName() : "anonymous";
         return ResponseEntity.ok(registrationService.getMyRegistrationDetails(payer));
     }
 

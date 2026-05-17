@@ -78,7 +78,7 @@ class RegistrationPaymentFlowTest {
 
     @Test
     void createsRegistrationWithGeneratedPaymentReferenceAndManualPaymentAttempt() {
-        Registration registration = registrationService.create("auth0|sam", new RegistrationCreateRequest(
+        Registration registration = registrationService.create("supabase|sam", new RegistrationCreateRequest(
                 event.getId(),
                 "Sam Tan",
                 "sam@example.com",
@@ -125,7 +125,7 @@ class RegistrationPaymentFlowTest {
 
     @Test
     void confirmingManualPaymentMarksRegistrationPaidAndCreatesInventoryMovements() {
-        Registration registration = registrationService.create("auth0|asha", new RegistrationCreateRequest(
+        Registration registration = registrationService.create("supabase|asha", new RegistrationCreateRequest(
                 event.getId(),
                 "Asha Lim",
                 "asha@example.com",
@@ -180,7 +180,7 @@ class RegistrationPaymentFlowTest {
 
     @Test
     void rejectingManualPaymentMarksRegistrationRejectedAndDoesNotMoveInventory() {
-        Registration registration = registrationService.create("auth0|mei", new RegistrationCreateRequest(
+        Registration registration = registrationService.create("supabase|mei", new RegistrationCreateRequest(
                 event.getId(),
                 "Mei Wong",
                 "mei@example.com",

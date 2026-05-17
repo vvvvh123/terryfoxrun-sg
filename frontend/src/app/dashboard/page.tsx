@@ -6,6 +6,7 @@ import { Alert, Box, Button, Chip, Paper, Stack, Typography } from "@mui/materia
 import Grid from "@mui/material/GridLegacy";
 import QrCode2Icon from "@mui/icons-material/QrCode2";
 import { RegistrationDetail, getMyRegistrations, getRegistration } from "@/lib/api";
+import { useAuth } from "@/components/AuthProvider";
 
 function formatMoney(cents: number) {
   return new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" }).format(cents / 100);
@@ -36,14 +37,20 @@ function paymentState(registration: RegistrationDetail) {
 
 function DashboardContent() {
   const searchParams = useSearchParams();
+  const { loading, user } = useAuth();
   const [registrations, setRegistrations] = useState<RegistrationDetail[]>([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    if (loading) return;
+    if (!user) {
+      setRegistrations([]);
+      return;
+    }
     const id = searchParams.get("registrationId") ?? window.localStorage.getItem("lastRegistrationId");
     const load = id ? getRegistration(Number(id)).then((registration) => [registration]) : getMyRegistrations();
     load.then(setRegistrations).catch(() => setError("No registration loaded yet. Complete a registration first, or start the backend."));
-  }, [searchParams]);
+  }, [loading, searchParams, user]);
 
   return (
     <Stack spacing={3}>
@@ -53,6 +60,18 @@ function DashboardContent() {
           Participant dashboard for payment status, event reminders, receipts, and pickup code access.
         </Typography>
       </Box>
+      {!loading && !user ? (
+        <Alert
+          severity="info"
+          action={
+            <Button href="/login" color="inherit" size="small">
+              Sign in
+            </Button>
+          }
+        >
+          Sign in to view your registrations, receipts, and pickup codes.
+        </Alert>
+      ) : null}
       {error ? <Alert severity="info">{error}</Alert> : null}
       <Grid container spacing={2}>
         {(registrations.length ? registrations : []).map((registration) => (

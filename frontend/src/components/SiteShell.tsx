@@ -2,14 +2,16 @@
 
 import Link from "next/link";
 import { AppBar, Box, Button, Container, Stack, Toolbar, Typography } from "@mui/material";
+import { useAuth } from "@/components/AuthProvider";
 
 export default function SiteShell({ children }: { children: React.ReactNode }) {
+  const { appRole, loading, signOut, user } = useAuth();
   const navItems = [
     { href: "/event", label: "Event" },
     { href: "/register", label: "Register" },
     { href: "/corporate", label: "Corporate" },
     { href: "/dashboard", label: "My Events" },
-    { href: "/admin", label: "Admin" },
+    ...(appRole === "admin" ? [{ href: "/admin", label: "Admin" }] : []),
   ];
 
   return (
@@ -31,6 +33,15 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
               </Button>
             ))}
           </Stack>
+          {user ? (
+            <Button onClick={() => signOut()} variant="outlined" color="inherit">
+              Sign out
+            </Button>
+          ) : (
+            <Button component={Link} href="/login" variant="outlined" color="inherit" disabled={loading}>
+              Sign in
+            </Button>
+          )}
           <Button component={Link} href="/register" variant="contained" sx={{ bgcolor: "#c91f2e" }}>
             Register
           </Button>

@@ -35,7 +35,7 @@ mvn spring-boot:run
 ```
 
 Default profile values are read from environment variables such as `DATABASE_URL`,
-`DATABASE_USERNAME`, `DATABASE_PASSWORD`, `AUTH0_ISSUER`, and `AUTH0_AUDIENCE`.
+`DATABASE_USERNAME`, `DATABASE_PASSWORD`, `SUPABASE_AUTH_ISSUER`, and `SUPABASE_AUTH_JWKS_URI`.
 
 ## Local Frontend
 

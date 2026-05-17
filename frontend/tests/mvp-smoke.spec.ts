@@ -107,8 +107,46 @@ async function mockBackend(page: Page) {
   );
 }
 
+async function mockSignedInAdmin(page: Page) {
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "sb-lhpondhrhnjnimvyozdc-auth-token",
+      JSON.stringify({
+        access_token: "test-access-token",
+        refresh_token: "test-refresh-token",
+        token_type: "bearer",
+        expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        user: {
+          id: "c56d2ed5-8a58-4e49-a425-4df634188e5c",
+          aud: "authenticated",
+          role: "authenticated",
+          email: "harlanivikas@gmail.com",
+          app_metadata: {
+            provider: "email",
+            app_role: "admin",
+          },
+          user_metadata: {},
+        },
+      }),
+    );
+  });
+}
+
 test.beforeEach(async ({ page }) => {
+  await mockSignedInAdmin(page);
   await mockBackend(page);
+});
+
+test("email login page starts Supabase magic-link sign in", async ({ page }) => {
+  await page.route("https://lhpondhrhnjnimvyozdc.supabase.co/auth/v1/otp**", (route) => route.fulfill({ json: {} }));
+
+  await page.goto("/login");
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  await page.getByLabel("Email address").fill("harlanivikas@gmail.com");
+  await page.getByRole("button", { name: "Send sign-in link" }).click();
+
+  await expect(page.getByText("Check your email for the sign-in link.")).toBeVisible();
 });
 
 test("public pages and mobile-first registration checkout flow", async ({ page }) => {

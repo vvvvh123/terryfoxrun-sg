@@ -20,6 +20,7 @@ import {
 } from "@mui/material";
 import Grid from "@mui/material/GridLegacy";
 import { CategoryDto, EventDto, ParticipantInput, RegistrationCreateResponse, createRegistration, getCategories, getCurrentEvent, submitPayment } from "@/lib/api";
+import { useAuth } from "@/components/AuthProvider";
 
 type ParticipantForm = {
   name: string;
@@ -47,6 +48,7 @@ const emptyParticipant = (categoryId = 0): ParticipantForm => ({
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const [event, setEvent] = useState<EventDto | null>(null);
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [payer, setPayer] = useState({
@@ -136,6 +138,10 @@ export default function RegisterPage() {
       setError("Event details are not loaded yet.");
       return;
     }
+    if (!user) {
+      setError("Please sign in before checkout so your registration appears in My Events.");
+      return;
+    }
     const validationError = validateRegistration();
     if (validationError) {
       setError(validationError);
@@ -193,6 +199,18 @@ export default function RegisterPage() {
       </Box>
       {error ? <Alert severity="warning">{error}</Alert> : null}
       {message ? <Alert severity="success">{message}</Alert> : null}
+      {!user ? (
+        <Alert
+          severity="info"
+          action={
+            <Button component={Link} href="/login" color="inherit" size="small">
+              Sign in
+            </Button>
+          }
+        >
+          Sign in before checkout so we can save registrations, receipts, and pickup codes to My Events.
+        </Alert>
+      ) : null}
       <Grid container spacing={2}>
         <Grid item xs={12} lg={8}>
           <Stack spacing={2}>
@@ -305,7 +323,7 @@ export default function RegisterPage() {
                 control={<Checkbox checked={indemnityAccepted} onChange={(e) => setIndemnityAccepted(e.target.checked)} />}
                 label="I agree to the indemnity and PDPA consent wording for this event."
               />
-              <Button fullWidth variant="contained" size="large" sx={{ mt: 2 }} disabled={!indemnityAccepted || !event} onClick={handleCreateRegistration}>
+              <Button fullWidth variant="contained" size="large" sx={{ mt: 2 }} disabled={!indemnityAccepted || !event || !user} onClick={handleCreateRegistration}>
                 Continue to payment
               </Button>
             </Paper>

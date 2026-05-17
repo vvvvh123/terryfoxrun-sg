@@ -1,12 +1,15 @@
 package com.terryfoxrun.api.config;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -36,8 +39,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/api/events/current", "/api/events/*", "/api/events/*/categories").permitAll()
-                        .requestMatchers("/api/registrations", "/api/registrations/quote").permitAll()
-                        .requestMatchers("/api/registrations/*/payment-attempts").permitAll()
+                        .requestMatchers("/api/registrations/quote").permitAll()
                         .requestMatchers("/api/registrations/me").hasAnyRole("PARTICIPANT", "ADMIN")
                         .requestMatchers("/api/pickup/**").hasAnyRole("VOLUNTEER", "ADMIN")
                         .requestMatchers("/api/admin/**", "/api/events/**", "/api/categories/**", "/api/corporate-orders/**", "/api/announcements/**", "/api/exports/**").hasRole("ADMIN")
@@ -61,11 +63,15 @@ public class SecurityConfig {
     }
 
     private JwtAuthenticationConverter jwtAuthenticationConverter() {
-        JwtGrantedAuthoritiesConverter delegate = new JwtGrantedAuthoritiesConverter();
-        delegate.setAuthoritiesClaimName("permissions"); // Auth0: set to "permissions" or adjust if using "roles"
-        delegate.setAuthorityPrefix("ROLE_");
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        converter.setJwtGrantedAuthoritiesConverter(delegate);
+        converter.setJwtGrantedAuthoritiesConverter(jwt -> {
+            String role = "participant";
+            Object appMetadata = jwt.getClaims().get("app_metadata");
+            if (appMetadata instanceof Map<?, ?> metadata && metadata.get("app_role") instanceof String appRole && !appRole.isBlank()) {
+                role = appRole;
+            }
+            return Stream.<GrantedAuthority>of(new SimpleGrantedAuthority("ROLE_" + role.trim().toUpperCase())).toList();
+        });
         converter.setPrincipalClaimName("sub");
         return converter;
     }
