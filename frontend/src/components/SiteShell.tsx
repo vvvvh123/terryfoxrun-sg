@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AppBar, Box, Button, Container, Stack, Toolbar, Typography } from "@mui/material";
 import { useAuth } from "@/components/AuthProvider";
 
 export default function SiteShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const { appRole, loading, signOut, user } = useAuth();
   const navItems = [
     { href: "/event", label: "Event" },
@@ -20,20 +22,36 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
     <Box sx={{ minHeight: "100vh", bgcolor: "#f6f7fb" }}>
       <AppBar position="sticky" elevation={0} sx={{ bgcolor: "#10233d", color: "white", borderBottom: "1px solid rgba(255,255,255,.16)" }}>
         <Toolbar sx={{ gap: 2, minHeight: 72 }}>
-          <Typography
+          <Stack
             component={Link}
             href="/"
-            variant="h6"
-            sx={{ color: "white", textDecoration: "none", fontWeight: 800, flexGrow: 1 }}
+            direction="row"
+            spacing={1.25}
+            alignItems="center"
+            sx={{ color: "white", textDecoration: "none", fontWeight: 800, flexGrow: 1, minWidth: 0 }}
           >
-            Terry Fox Run Singapore
-          </Typography>
+            <Box component="img" src="/terry_fox_logo.png" alt="Terry Fox Run Singapore logo" sx={{ width: 38, height: 38, objectFit: "contain", flexShrink: 0 }} />
+            <Typography variant="h6" sx={{ color: "white", fontWeight: 800, lineHeight: 1.1 }}>
+              Terry Fox Run Singapore
+            </Typography>
+          </Stack>
           <Stack direction="row" spacing={0.5} sx={{ display: { xs: "none", md: "flex" } }}>
-            {navItems.map((item) => (
-              <Button key={item.href} component={Link} href={item.href} color="inherit" size="small" sx={{ color: "white" }}>
-                {item.label}
-              </Button>
-            ))}
+            {navItems.map((item) => {
+              const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              return (
+                <Button
+                  key={item.href}
+                  component={Link}
+                  href={item.href}
+                  color="inherit"
+                  size="small"
+                  aria-current={active ? "page" : undefined}
+                  sx={{ color: active ? "#c91f2e" : "white", fontWeight: active ? 800 : 600 }}
+                >
+                  {item.label}
+                </Button>
+              );
+            })}
             <Button component="a" href="https://instagram.com/terryfoxrunsingapore/" target="_blank" rel="noreferrer" color="inherit" size="small" sx={{ minWidth: 36, color: "white" }} aria-label="Instagram">
               <Box component="img" src="/ig_logo.jpg" alt="" sx={{ width: 22, height: 22, objectFit: "contain", borderRadius: "50%" }} />
             </Button>

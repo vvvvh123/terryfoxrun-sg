@@ -188,12 +188,18 @@ test("email login page starts Supabase magic-link sign in", async ({ page }) => 
 test("public pages and mobile-first registration checkout flow", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Terry Fox Run Singapore, 2026" })).toBeVisible();
+  await expect(page.getByAltText("Terry Fox Run Singapore logo")).toBeVisible();
   await expect(page.getByText("Mobile-first registration")).toBeVisible();
   await page.goto("/terrys-story");
   await expect(page.getByRole("heading", { name: "One run inspired a movement." })).toBeVisible();
 
   await page.goto("/event");
   await expect(page.getByRole("heading", { name: "Terry Fox Run Singapore, 2026" })).toBeVisible();
+  if ((page.viewportSize()?.width ?? 0) >= 900) {
+    const eventNav = page.getByRole("link", { name: "Event", exact: true });
+    await expect(eventNav).toHaveAttribute("aria-current", "page");
+    await expect(eventNav).toHaveCSS("color", "rgb(201, 31, 46)");
+  }
   await expect(page.getByText("Angsana Green, East Coast Park")).toBeVisible();
   await expect(page.getByText("Limited-edition event T-shirt for supporters.")).toBeVisible();
   await expect(page.getByText("Please collect your T-shirt during the published pickup window.")).toHaveCount(0);
@@ -201,11 +207,27 @@ test("public pages and mobile-first registration checkout flow", async ({ page }
   await expect(page.getByRole("heading", { name: "Size charts" })).toHaveCount(0);
 
   await page.goto("/register");
+  if ((page.viewportSize()?.width ?? 0) >= 900) {
+    const registerNav = page.getByRole("link", { name: "Register", exact: true });
+    await expect(registerNav).toHaveAttribute("aria-current", "page");
+    await expect(registerNav).toHaveCSS("color", "rgb(201, 31, 46)");
+  }
+  await expect(page.getByText("Review this year's run details before completing registration.")).toBeVisible();
+  await expect(page.getByText("Angsana Green, East Coast Park")).toBeVisible();
   await expect(page.getByText("2026 Terry Fox Run T-Shirt")).toBeVisible();
   await expect(page.getByText("$35.00 each")).toBeVisible();
   await expect(page.getByText("Please collect your T-shirt during the published pickup window.")).toBeVisible();
   await expect(page.getByText("All net proceeds support cancer research in Singapore.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Size charts" })).toBeVisible();
+  const overviewBox = await page.getByRole("heading", { name: "Terry Fox Run Singapore, 2026" }).boundingBox();
+  const shirtBox = await page.getByText("2026 Terry Fox Run T-Shirt").boundingBox();
+  const payerBox = await page.getByRole("heading", { name: "Payer and primary participant" }).boundingBox();
+  expect(overviewBox?.y ?? 0).toBeLessThan(shirtBox?.y ?? Number.POSITIVE_INFINITY);
+  expect(shirtBox?.y ?? 0).toBeLessThan(payerBox?.y ?? Number.POSITIVE_INFINITY);
+  await expect(page.getByRole("button", { name: "$0" })).toBeVisible();
+  await page.getByRole("button", { name: "$0" }).click();
+  await expect(page.getByLabel("Custom donation")).toHaveValue("0");
+  await page.getByLabel("Custom donation").fill("50");
   await page.getByLabel("Name").first().fill("Alex Tan");
   await page.getByLabel("Email address").fill("alex@example.com");
   await page.getByLabel("NRIC / Passport / FIN").fill("S1234567A");

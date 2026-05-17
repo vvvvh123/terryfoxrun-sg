@@ -41,6 +41,7 @@ type ParticipantForm = {
 };
 
 const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
+const donationPresets = [0, 20, 50, 100];
 
 const fallbackPaymentInstructions = {
   payNowQrImageUrl: "/paynow-placeholder.svg",
@@ -54,6 +55,11 @@ const fallbackPaymentInstructions = {
 
 function formatMoney(cents: number) {
   return new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" }).format(cents / 100);
+}
+
+function formatDate(value?: string) {
+  if (!value) return "To be confirmed";
+  return new Intl.DateTimeFormat("en-SG", { dateStyle: "full", timeStyle: "short" }).format(new Date(value));
 }
 
 const emptyParticipant = (categoryId = 0): ParticipantForm => ({
@@ -307,6 +313,92 @@ export default function RegisterPage() {
           Sign in before checkout so we can save registrations, receipts, and pickup codes to My Events.
         </Alert>
       ) : null}
+      <Paper sx={{ p: 3 }}>
+        <Stack spacing={2.5}>
+          <Box>
+            <Typography variant="h4">{event ? `${event.name}, ${event.year}` : "Event overview"}</Typography>
+            <Typography color="text.secondary" sx={{ mt: 1, maxWidth: 900 }}>
+              Review this year&apos;s run details before completing registration.
+            </Typography>
+          </Box>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Typography fontWeight={800}>Run date and time</Typography>
+              <Typography color="text.secondary">{formatDate(event?.eventStart)}</Typography>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Typography fontWeight={800}>Venue</Typography>
+              <Typography color="text.secondary">{event?.locationEvent ?? "Venue to be confirmed"}</Typography>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Typography fontWeight={800}>Registration closes</Typography>
+              <Typography color="text.secondary">{formatDate(event?.registrationClose)}</Typography>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Typography fontWeight={800}>T-shirt pickup</Typography>
+              <Typography color="text.secondary">
+                {event?.locationPickup ?? "Pickup venue to be confirmed"} · {formatDate(event?.pickupStart)}
+              </Typography>
+            </Grid>
+          </Grid>
+          {(eventDetails?.scheduleSummary || eventDetails?.routeNotes) ? (
+            <Box>
+              {eventDetails?.scheduleSummary ? <Typography>{eventDetails.scheduleSummary}</Typography> : null}
+              {eventDetails?.routeNotes ? <Typography color="text.secondary" sx={{ mt: 0.5 }}>{eventDetails.routeNotes}</Typography> : null}
+            </Box>
+          ) : null}
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            {(categories.length ? categories : [{ id: 0, name: "5K / 10K Fun Run" }]).map((category) => (
+              <Chip key={category.id} label={category.name} />
+            ))}
+          </Stack>
+        </Stack>
+      </Paper>
+      <Paper sx={{ p: 3 }}>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} md={5}>
+            <Grid container spacing={1.5}>
+              <Grid item xs={12} sm={6}>
+                <TShirtImage src={eventDetails?.tshirtFrontImageUrl || eventDetails?.tshirtBackImageUrl || "/paynow-placeholder.svg"} alt="T-shirt front design" />
+              </Grid>
+              {eventDetails?.tshirtBackImageUrl ? (
+                <Grid item xs={12} sm={6}>
+                  <TShirtImage src={eventDetails.tshirtBackImageUrl} alt="T-shirt back design" />
+                </Grid>
+              ) : null}
+            </Grid>
+          </Grid>
+          <Grid item xs={12} md={7}>
+            <Typography variant="h5">{eventDetails?.tshirtTitle ?? `${event?.year ?? ""} Terry Fox Run T-Shirt`}</Typography>
+            <Typography color="text.secondary" sx={{ mt: 1, whiteSpace: "pre-line" }}>
+              {eventDetails?.tshirtDescription ?? "T-shirt design and sizing information will be confirmed by the committee."}
+            </Typography>
+            <Chip sx={{ mt: 2 }} label={`${formatMoney(shirtPrice)} each`} />
+            {eventDetails?.pickupDisclaimer ? <Alert severity="info" sx={{ mt: 2 }}>{eventDetails.pickupDisclaimer}</Alert> : null}
+            {eventDetails?.donationNote ? <Alert severity="success" sx={{ mt: 2 }}>{eventDetails.donationNote}</Alert> : null}
+          </Grid>
+          {(eventDetails?.kidsSizeChartImageUrl || eventDetails?.adultSizeChartImageUrl) ? (
+            <Grid item xs={12}>
+              <Divider sx={{ my: 1 }} />
+              <Typography variant="h6" sx={{ mb: 1.5 }}>Size charts</Typography>
+              <Grid container spacing={2}>
+                {eventDetails?.kidsSizeChartImageUrl ? (
+                  <Grid item xs={12} md={6}>
+                    <Typography fontWeight={800} sx={{ mb: 1 }}>Kids</Typography>
+                    <TShirtImage src={eventDetails.kidsSizeChartImageUrl} alt="Kids T-shirt size chart" />
+                  </Grid>
+                ) : null}
+                {eventDetails?.adultSizeChartImageUrl ? (
+                  <Grid item xs={12} md={6}>
+                    <Typography fontWeight={800} sx={{ mb: 1 }}>Adult</Typography>
+                    <TShirtImage src={eventDetails.adultSizeChartImageUrl} alt="Adult T-shirt size chart" />
+                  </Grid>
+                ) : null}
+              </Grid>
+            </Grid>
+          ) : null}
+        </Grid>
+      </Paper>
       <Grid container spacing={2}>
         <Grid item xs={12} lg={8}>
           <Stack spacing={2}>
@@ -368,51 +460,6 @@ export default function RegisterPage() {
                     onChange={(e) => updatePrimaryParticipant({ tshirtQty: Math.max(0, Number(e.target.value)) })}
                   />
                 </Grid>
-              </Grid>
-            </Paper>
-            <Paper sx={{ p: 3 }}>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} md={5}>
-                  <Grid container spacing={1.5}>
-                    <Grid item xs={12} sm={6}>
-                      <TShirtImage src={eventDetails?.tshirtFrontImageUrl || eventDetails?.tshirtBackImageUrl || "/paynow-placeholder.svg"} alt="T-shirt front design" />
-                    </Grid>
-                    {eventDetails?.tshirtBackImageUrl ? (
-                      <Grid item xs={12} sm={6}>
-                        <TShirtImage src={eventDetails.tshirtBackImageUrl} alt="T-shirt back design" />
-                      </Grid>
-                    ) : null}
-                  </Grid>
-                </Grid>
-                <Grid item xs={12} md={7}>
-                  <Typography variant="h5">{eventDetails?.tshirtTitle ?? `${event?.year ?? ""} Terry Fox Run T-Shirt`}</Typography>
-                  <Typography color="text.secondary" sx={{ mt: 1, whiteSpace: "pre-line" }}>
-                    {eventDetails?.tshirtDescription ?? "T-shirt design and sizing information will be confirmed by the committee."}
-                  </Typography>
-                  <Chip sx={{ mt: 2 }} label={`${formatMoney(shirtPrice)} each`} />
-                  {eventDetails?.pickupDisclaimer ? <Alert severity="info" sx={{ mt: 2 }}>{eventDetails.pickupDisclaimer}</Alert> : null}
-                  {eventDetails?.donationNote ? <Alert severity="success" sx={{ mt: 2 }}>{eventDetails.donationNote}</Alert> : null}
-                </Grid>
-                {(eventDetails?.kidsSizeChartImageUrl || eventDetails?.adultSizeChartImageUrl) ? (
-                  <Grid item xs={12}>
-                    <Divider sx={{ my: 1 }} />
-                    <Typography variant="h6" sx={{ mb: 1.5 }}>Size charts</Typography>
-                    <Grid container spacing={2}>
-                      {eventDetails?.kidsSizeChartImageUrl ? (
-                        <Grid item xs={12} md={6}>
-                          <Typography fontWeight={800} sx={{ mb: 1 }}>Kids</Typography>
-                          <TShirtImage src={eventDetails.kidsSizeChartImageUrl} alt="Kids T-shirt size chart" />
-                        </Grid>
-                      ) : null}
-                      {eventDetails?.adultSizeChartImageUrl ? (
-                        <Grid item xs={12} md={6}>
-                          <Typography fontWeight={800} sx={{ mb: 1 }}>Adult</Typography>
-                          <TShirtImage src={eventDetails.adultSizeChartImageUrl} alt="Adult T-shirt size chart" />
-                        </Grid>
-                      ) : null}
-                    </Grid>
-                  </Grid>
-                ) : null}
               </Grid>
             </Paper>
             <Paper sx={{ p: 3 }}>
@@ -494,16 +541,39 @@ export default function RegisterPage() {
         <Grid item xs={12} lg={4}>
           <Stack spacing={2}>
             <Paper sx={{ p: 3 }}>
-              <Typography variant="h5">Donation and review</Typography>
+              <Typography variant="h5">Donation</Typography>
+              <Typography color="text.secondary" sx={{ mt: 1 }}>
+                Add an optional donation to support cancer research.
+              </Typography>
+              <Grid container spacing={1} sx={{ mt: 2 }}>
+                {donationPresets.map((amount) => (
+                  <Grid item xs={6} sm={3} lg={6} key={amount}>
+                    <Button
+                      fullWidth
+                      variant={donationAmount === amount ? "contained" : "outlined"}
+                      onClick={() => setDonationAmount(amount)}
+                    >
+                      ${amount}
+                    </Button>
+                  </Grid>
+                ))}
+              </Grid>
               <TextField
                 fullWidth
                 type="number"
-                label="Additional donation"
+                label="Custom donation"
                 value={donationAmount}
                 inputProps={{ min: 0 }}
                 onChange={(e) => setDonationAmount(Math.max(0, Number(e.target.value)))}
                 sx={{ mt: 2 }}
               />
+            </Paper>
+            <Paper sx={{ p: 3 }}>
+              <Typography variant="h5">Review</Typography>
+              <Box sx={{ mt: 2, p: 2, bgcolor: "#f6f7fb", borderRadius: 2 }}>
+                <Typography color="text.secondary">Donation</Typography>
+                <Typography variant="h5">{formatMoney(Number(donationAmount || 0) * 100)}</Typography>
+              </Box>
               <Box sx={{ mt: 2, p: 2, bgcolor: "#f6f7fb", borderRadius: 2 }}>
                 <Typography color="text.secondary">Estimated total</Typography>
                 <Typography variant="h4">{formatMoney(total)}</Typography>

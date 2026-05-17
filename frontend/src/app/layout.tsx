@@ -7,6 +7,10 @@ import { AuthProvider } from "@/components/AuthProvider";
 export const metadata: Metadata = {
   title: "Terry Fox Run Singapore",
   description: "Registration and event information for Terry Fox Run Singapore.",
+  icons: {
+    icon: "/terry_fox_logo.png",
+    apple: "/terry_fox_logo.png",
+  },
 };
 
 export default function RootLayout({
