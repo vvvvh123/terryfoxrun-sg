@@ -8,4 +8,6 @@ public interface EmailService {
     void sendPaymentConfirmedEmail(Registration registration);
 
     void sendPaymentRejectedEmail(Registration registration, String reason);
+
+    void sendContactSubmissionEmail(String recipientEmail, String fromEmail, String senderName, String message);
 }

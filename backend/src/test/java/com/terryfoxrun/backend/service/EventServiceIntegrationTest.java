@@ -23,5 +23,11 @@ class EventServiceIntegrationTest {
         assertThat(event.fieldFlags()).containsEntry("allowDonation", true);
         assertThat(event.donationPresets()).containsExactly(20, 50, 100);
         assertThat(event.branding().primary()).isEqualTo("#d90429");
+        assertThat(event.paymentInstructions().bankName()).isEqualTo("DBS Bank Pte Ltd");
+        assertThat(event.paymentInstructions().proofBucket()).isEqualTo("payment-proofs");
+        assertThat(event.eventDetails().tshirtTitle()).contains("Terry Fox Run T-Shirt");
+        assertThat(event.faqs()).isNotEmpty();
+        assertThat(event.contactRecipientEmail()).isEqualTo("corporate@terryfoxrun.global");
+        assertThat(event.socialLinks().instagramUrl()).contains("instagram.com/terryfoxrunsingapore");
     }
 }

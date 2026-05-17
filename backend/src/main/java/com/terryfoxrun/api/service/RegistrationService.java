@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -293,6 +294,12 @@ public class RegistrationService {
 
     private String generatePaymentReference(Event event) {
         int year = Optional.ofNullable(event.getYear()).orElse(LocalDateTime.now().getYear());
-        return "TFR" + String.valueOf(year).substring(2) + "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        for (int attempts = 0; attempts < 50; attempts++) {
+            String reference = "TFR" + year + "-" + String.format("%05d", ThreadLocalRandom.current().nextInt(100_000));
+            if (registrationRepository.findByGeneratedPaymentReference(reference).isEmpty()) {
+                return reference;
+            }
+        }
+        throw new IllegalStateException("Could not generate a unique payment reference.");
     }
 }

@@ -47,6 +47,11 @@ public class EventService {
     }
 
     @Transactional(readOnly = true)
+    public List<EventDto> listEvents() {
+        return eventRepository.findAllByOrderByYearDescCreatedAtDesc().stream().map(this::toDto).toList();
+    }
+
+    @Transactional(readOnly = true)
     public Optional<EventDto> getCurrentEvent() {
         return eventRepository.findFirstByCurrentTrue().map(this::toDto);
     }
@@ -83,6 +88,100 @@ public class EventService {
             }
         }
         return toDto(event);
+    }
+
+    @Transactional
+    public EventDto copyEvent(Long sourceEventId) {
+        Event source = eventRepository.findById(sourceEventId).orElseThrow();
+        Event copy = new Event();
+        copy.setName(source.getName() + " Copy");
+        copy.setYear(Optional.ofNullable(source.getYear()).orElse(java.time.LocalDateTime.now().getYear()) + 1);
+        copy.setCurrent(false);
+        copy.setStatus("draft");
+        copy.setRegistrationOpen(source.getRegistrationOpen());
+        copy.setRegistrationClose(source.getRegistrationClose());
+        copy.setEventStart(source.getEventStart());
+        copy.setEventEnd(source.getEventEnd());
+        copy.setPickupStart(source.getPickupStart());
+        copy.setPickupEnd(source.getPickupEnd());
+        copy.setLocationEvent(source.getLocationEvent());
+        copy.setLocationPickup(source.getLocationPickup());
+        copy.setFieldFlagsJson(source.getFieldFlagsJson());
+        copy.setDonationPresetsJson(source.getDonationPresetsJson());
+        copy.setShirtPrice(source.getShirtPrice());
+        copy.setBrandingJson(source.getBrandingJson());
+        copy.setPaymentInstructionsJson(source.getPaymentInstructionsJson());
+        copy.setEventDetailsJson(source.getEventDetailsJson());
+        copy.setFaqsJson(source.getFaqsJson());
+        copy.setSocialLinksJson(source.getSocialLinksJson());
+        copy.setContactRecipientEmail(source.getContactRecipientEmail());
+        copy.setCreatedAt(java.time.LocalDateTime.now());
+        eventRepository.save(copy);
+
+        categoryRepository.findByEvent(source).forEach(category -> {
+            Category clone = new Category();
+            clone.setEvent(copy);
+            clone.setName(category.getName());
+            clone.setDescription(category.getDescription());
+            clone.setBasePrice(category.getBasePrice());
+            clone.setActive(category.isActive());
+            categoryRepository.save(clone);
+        });
+        shirtInventoryRepository.findByEvent(source).forEach(item -> {
+            ShirtInventory clone = new ShirtInventory();
+            clone.setEvent(copy);
+            clone.setType(item.getType());
+            clone.setSize(item.getSize());
+            clone.setQuantityAvailable(item.getQuantityAvailable());
+            clone.setQuantityReserved(0);
+            clone.setQuantitySold(0);
+            shirtInventoryRepository.save(clone);
+        });
+        slideshowImageRepository.findByEventOrderByDisplayOrderAsc(source).forEach(slide -> {
+            EventSlideshowImage clone = new EventSlideshowImage();
+            clone.setEvent(copy);
+            clone.setImageUrl(slide.getImageUrl());
+            clone.setBlurb(slide.getBlurb());
+            clone.setDisplayOrder(slide.getDisplayOrder());
+            clone.setActive(slide.isActive());
+            slideshowImageRepository.save(clone);
+        });
+        formFieldConfigRepository.findByEventOrderByDisplayOrderAsc(source).forEach(field -> {
+            EventFormFieldConfig clone = new EventFormFieldConfig();
+            clone.setEvent(copy);
+            clone.setFieldKey(field.getFieldKey());
+            clone.setLabel(field.getLabel());
+            clone.setVisibility(field.getVisibility());
+            clone.setAppliesTo(field.getAppliesTo());
+            clone.setDisplayOrder(field.getDisplayOrder());
+            formFieldConfigRepository.save(clone);
+        });
+        return toDto(copy);
+    }
+
+    @Transactional
+    public EventDto setCurrentEvent(Long eventId) {
+        Event selected = eventRepository.findById(eventId).orElseThrow();
+        eventRepository.findAll().forEach(event -> {
+            event.setCurrent(event.getId().equals(eventId));
+            eventRepository.save(event);
+        });
+        selected.setCurrent(true);
+        return toDto(selected);
+    }
+
+    @Transactional
+    public void deleteEvent(Long eventId) {
+        Event selected = eventRepository.findById(eventId).orElseThrow();
+        boolean wasCurrent = selected.isCurrent();
+        eventRepository.delete(selected);
+        eventRepository.flush();
+        if (wasCurrent) {
+            eventRepository.findAllByOrderByYearDescCreatedAtDesc().stream().findFirst().ifPresent(next -> {
+                next.setCurrent(true);
+                eventRepository.save(next);
+            });
+        }
     }
 
     @Transactional
@@ -169,7 +268,12 @@ public class EventService {
                 fromJsonList(event.getDonationPresetsJson()),
                 event.getShirtPrice(),
                 sizes,
-                fromJsonBranding(event.getBrandingJson())
+                fromJsonBranding(event.getBrandingJson()),
+                fromJsonPaymentInstructions(event.getPaymentInstructionsJson()),
+                fromJsonEventDetails(event.getEventDetailsJson()),
+                fromJsonFaqs(event.getFaqsJson()),
+                event.getContactRecipientEmail(),
+                fromJsonSocialLinks(event.getSocialLinksJson())
         );
     }
 
@@ -213,6 +317,14 @@ public class EventService {
         event.setDonationPresetsJson(toJson(dto.donationPresets()));
         event.setShirtPrice(dto.shirtPrice());
         event.setBrandingJson(toJson(dto.branding()));
+        event.setPaymentInstructionsJson(toJson(dto.paymentInstructions()));
+        event.setEventDetailsJson(toJson(dto.eventDetails()));
+        event.setFaqsJson(toJson(dto.faqs()));
+        event.setContactRecipientEmail(dto.contactRecipientEmail());
+        event.setSocialLinksJson(toJson(dto.socialLinks()));
+        if (event.getCreatedAt() == null) {
+            event.setCreatedAt(java.time.LocalDateTime.now());
+        }
     }
 
     private java.time.LocalDateTime fromInstant(java.time.Instant instant) {
@@ -257,12 +369,52 @@ public class EventService {
         }
     }
 
+    private EventDto.PaymentInstructionsDto fromJsonPaymentInstructions(String json) {
+        if (json == null) return null;
+        try {
+            json = normalizeJson(json);
+            return objectMapper.readValue(json, EventDto.PaymentInstructionsDto.class);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private EventDto.EventDetailsDto fromJsonEventDetails(String json) {
+        if (json == null) return null;
+        try {
+            json = normalizeJson(json);
+            return objectMapper.readValue(json, EventDto.EventDetailsDto.class);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private java.util.List<EventDto.FaqDto> fromJsonFaqs(String json) {
+        if (json == null) return java.util.List.of();
+        try {
+            json = normalizeJson(json);
+            return objectMapper.readValue(json, objectMapper.getTypeFactory().constructCollectionType(java.util.List.class, EventDto.FaqDto.class));
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private EventDto.SocialLinksDto fromJsonSocialLinks(String json) {
+        if (json == null) return null;
+        try {
+            json = normalizeJson(json);
+            return objectMapper.readValue(json, EventDto.SocialLinksDto.class);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private String normalizeJson(String json) throws JsonProcessingException {
         String trimmed = json.trim();
-        if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
-            return objectMapper.readValue(trimmed, String.class);
+        while (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+            trimmed = objectMapper.readValue(trimmed, String.class).trim();
         }
-        return json;
+        return trimmed;
     }
 
     private String toJson(Object value) {

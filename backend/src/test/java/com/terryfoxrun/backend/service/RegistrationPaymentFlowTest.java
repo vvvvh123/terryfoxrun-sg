@@ -114,7 +114,7 @@ class RegistrationPaymentFlowTest {
 
         Registration saved = registrationRepository.findById(registration.getId()).orElseThrow();
 
-        assertThat(saved.getGeneratedPaymentReference()).startsWith("TFR26-");
+        assertThat(saved.getGeneratedPaymentReference()).matches("TFR2026-\\d{5}");
         assertThat(saved.getTotalAmount()).isEqualTo(60_00);
         assertThat(saved.getStatus()).isEqualTo("WAITING_FOR_PAYMENT_CONFIRMATION");
         assertThat(saved.getPaymentStatus()).isEqualTo("PENDING_ADMIN_VERIFICATION");
@@ -157,6 +157,8 @@ class RegistrationPaymentFlowTest {
                 PaymentMethod.BANK_TRANSFER,
                 "FAST-USER-456",
                 null);
+
+        assertThat(attempt.getProofFileUrl()).isNull();
 
         paymentService.confirmPayment(attempt.getId(), "BANK-SETTLED-999", "admin@example.com");
 

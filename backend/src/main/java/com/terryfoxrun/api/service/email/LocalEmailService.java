@@ -47,6 +47,17 @@ public class LocalEmailService implements EmailService {
                 Instant.now()));
     }
 
+    @Override
+    public void sendContactSubmissionEmail(String recipientEmail, String fromEmail, String senderName, String message) {
+        store(new EmailPreview(
+                "contact-submission",
+                recipientEmail,
+                "Terry Fox Run website contact submission",
+                senderName + " (" + fromEmail + ") wrote: " + message,
+                null,
+                Instant.now()));
+    }
+
     public List<EmailPreview> sentEmails() {
         return List.copyOf(sentEmails);
     }

@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -23,10 +24,15 @@ public class InventoryController {
         return ResponseEntity.ok(inventoryService.getInventory(eventId));
     }
 
+    @GetMapping("/sold-daily")
+    public ResponseEntity<Object> getDailySold(@PathVariable Long eventId,
+                                               @RequestParam(defaultValue = "ALL") String size) {
+        return ResponseEntity.ok(inventoryService.getDailySold(eventId, size));
+    }
+
     @PatchMapping
     public ResponseEntity<Object> updateInventory(@PathVariable Long eventId, @RequestBody java.util.List<com.terryfoxrun.api.dto.EventDto.ShirtSizeDto> items) {
         inventoryService.updateInventory(eventId, items);
         return ResponseEntity.ok().build();
     }
 }
-

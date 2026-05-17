@@ -42,6 +42,20 @@ public class Event {
     @Column(columnDefinition = "jsonb")
     private String brandingJson;
 
+    @Column(columnDefinition = "jsonb")
+    private String paymentInstructionsJson;
+
+    @Column(columnDefinition = "jsonb")
+    private String eventDetailsJson;
+
+    @Column(columnDefinition = "jsonb")
+    private String faqsJson;
+
+    @Column(columnDefinition = "jsonb")
+    private String socialLinksJson;
+
+    private String contactRecipientEmail;
+
     private LocalDateTime createdAt;
 
     @OneToMany(mappedBy = "event", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -60,6 +74,11 @@ public class Event {
         event.setFieldFlagsJson("{}");
         event.setDonationPresetsJson("[]");
         event.setBrandingJson("{}");
+        event.setPaymentInstructionsJson("{}");
+        event.setEventDetailsJson("{}");
+        event.setFaqsJson("[]");
+        event.setSocialLinksJson("{}");
+        event.setContactRecipientEmail("corporate@terryfoxrun.global");
         event.setCreatedAt(LocalDateTime.now());
         return event;
     }
@@ -198,6 +217,46 @@ public class Event {
 
     public void setBrandingJson(String brandingJson) {
         this.brandingJson = brandingJson;
+    }
+
+    public String getPaymentInstructionsJson() {
+        return paymentInstructionsJson;
+    }
+
+    public void setPaymentInstructionsJson(String paymentInstructionsJson) {
+        this.paymentInstructionsJson = paymentInstructionsJson;
+    }
+
+    public String getEventDetailsJson() {
+        return eventDetailsJson;
+    }
+
+    public void setEventDetailsJson(String eventDetailsJson) {
+        this.eventDetailsJson = eventDetailsJson;
+    }
+
+    public String getFaqsJson() {
+        return faqsJson;
+    }
+
+    public void setFaqsJson(String faqsJson) {
+        this.faqsJson = faqsJson;
+    }
+
+    public String getSocialLinksJson() {
+        return socialLinksJson;
+    }
+
+    public void setSocialLinksJson(String socialLinksJson) {
+        this.socialLinksJson = socialLinksJson;
+    }
+
+    public String getContactRecipientEmail() {
+        return contactRecipientEmail;
+    }
+
+    public void setContactRecipientEmail(String contactRecipientEmail) {
+        this.contactRecipientEmail = contactRecipientEmail;
     }
 
     public LocalDateTime getCreatedAt() {

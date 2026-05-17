@@ -19,6 +19,11 @@ public class EventController {
         this.eventService = eventService;
     }
 
+    @GetMapping
+    public ResponseEntity<List<EventDto>> listEvents() {
+        return ResponseEntity.ok(eventService.listEvents());
+    }
+
     @GetMapping("/current")
     public ResponseEntity<EventDto> getCurrentEvent() {
         return eventService.getCurrentEvent()
@@ -68,5 +73,21 @@ public class EventController {
     @PatchMapping("/{id}")
     public ResponseEntity<EventDto> updateEvent(@PathVariable Long id, @RequestBody EventDto request) {
         return ResponseEntity.ok(eventService.createOrUpdate(id, request));
+    }
+
+    @PostMapping("/{id}/copy")
+    public ResponseEntity<EventDto> copyEvent(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.copyEvent(id));
+    }
+
+    @PatchMapping("/{id}/current")
+    public ResponseEntity<EventDto> setCurrentEvent(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.setCurrentEvent(id));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteEvent(@PathVariable Long id) {
+        eventService.deleteEvent(id);
+        return ResponseEntity.noContent().build();
     }
 }

@@ -12,6 +12,7 @@ import com.terryfoxrun.api.repo.EventFormFieldConfigRepository;
 import com.terryfoxrun.api.repo.EventRepository;
 import com.terryfoxrun.api.repo.EventSlideshowImageRepository;
 import com.terryfoxrun.api.repo.PaymentAttemptRepository;
+import com.terryfoxrun.api.service.email.LocalEmailService;
 import com.terryfoxrun.api.repo.CategoryRepository;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -57,6 +59,9 @@ class MvpApiIntegrationTest {
     @Autowired
     private PaymentAttemptRepository paymentAttemptRepository;
 
+    @Autowired
+    private LocalEmailService localEmailService;
+
     @Test
     void servesAndReplacesSlideshowImages() throws Exception {
         Long eventId = eventRepository.findFirstByCurrentTrue().orElseThrow().getId();
@@ -78,6 +83,56 @@ class MvpApiIntegrationTest {
         List<EventSlideshowImage> saved = slideshowImageRepository.findByEventAndActiveTrueOrderByDisplayOrderAsc(
                 eventRepository.findById(eventId).orElseThrow());
         assertThat(saved).hasSize(2);
+    }
+
+    @Test
+    void listsCopiesAndSelectsEvents() throws Exception {
+        Long eventId = eventRepository.findFirstByCurrentTrue().orElseThrow().getId();
+
+        mockMvc.perform(get("/api/events"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").exists());
+
+        String copiedJson = mockMvc.perform(post("/api/events/{eventId}/copy", eventId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isCurrent").value(false))
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        Long copiedEventId = objectMapper.readTree(copiedJson).get("id").asLong();
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/events/{eventId}/current", copiedEventId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isCurrent").value(true));
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/events/{eventId}/current", eventId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isCurrent").value(true));
+
+        mockMvc.perform(delete("/api/events/{eventId}", copiedEventId))
+                .andExpect(status().isNoContent());
+
+        assertThat(eventRepository.findById(copiedEventId)).isEmpty();
+    }
+
+    @Test
+    void acceptsContactSubmissionAndCreatesEmailPreview() throws Exception {
+        localEmailService.clear();
+        Long eventId = eventRepository.findFirstByCurrentTrue().orElseThrow().getId();
+
+        mockMvc.perform(post("/api/events/{eventId}/contact-submissions", eventId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "firstName", "Alex",
+                                "lastName", "Tan",
+                                "email", "alex@example.com",
+                                "message", "How do I volunteer?"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("EMAIL_PREVIEW_CREATED"));
+
+        assertThat(localEmailService.sentEmails())
+                .extracting(email -> email.template())
+                .contains("contact-submission");
     }
 
     @Test
@@ -155,6 +210,7 @@ class MvpApiIntegrationTest {
         mockMvc.perform(get("/api/registrations/{registrationId}", registrationId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.payerEmail").value("sam@example.com"))
+                .andExpect(jsonPath("$.generatedPaymentReference").value(org.hamcrest.Matchers.matchesPattern("TFR2025-\\d{5}")))
                 .andExpect(jsonPath("$.participants", hasSize(1)))
                 .andExpect(jsonPath("$.paymentAttempts[0].verificationStatus").value("PENDING_ADMIN_VERIFICATION"));
 

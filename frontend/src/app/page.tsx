@@ -96,7 +96,7 @@ export default function Home() {
             <Box sx={{ position: "relative", maxWidth: 720 }}>
               <Chip label="Build once, re-use every year" sx={{ bgcolor: "white", color: "#10233d", fontWeight: 800, mb: 3 }} />
               <Typography variant="h2" sx={{ fontSize: { xs: 40, md: 68 }, lineHeight: 1 }}>
-                {event?.name ?? "Terry Fox Run Singapore"}
+                {event ? `${event.name}, ${event.year}` : "Terry Fox Run Singapore"}
               </Typography>
               <Typography variant="h6" sx={{ mt: 3, maxWidth: 620, color: "rgba(255,255,255,.88)" }}>
                 A mobile-friendly event website for registration, donations, T-shirt pickup, yearly history, and
@@ -142,6 +142,7 @@ export default function Home() {
                   <CalendarMonthIcon color="primary" />
                   <Box>
                     <Typography fontWeight={800}>Current event</Typography>
+                    {event ? <Typography>{event.name}, {event.year}</Typography> : null}
                     <Typography color="text.secondary">{formatDate(event?.eventStart)}</Typography>
                   </Box>
                 </Stack>

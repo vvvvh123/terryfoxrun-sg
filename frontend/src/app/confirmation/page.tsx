@@ -27,15 +27,16 @@ function ConfirmationContent() {
       .catch(() => setError("Could not load the registration confirmation. Please start the backend and try again."));
   }, [searchParams]);
 
-  const latestPayment = useMemo(() => registration?.paymentAttempts.at(-1), [registration]);
+  const latestPayment = useMemo(() => registration?.paymentAttempts[0], [registration]);
   const methodLabel = latestPayment?.method === "BANK_TRANSFER" ? "bank transfer" : "PayNow";
+  const eventYear = registration?.eventName.match(/\b(20\d{2})\b/)?.[1] ?? new Date().getFullYear();
 
   return (
     <Stack spacing={3}>
       <Box>
-        <Typography variant="h3">Payment Submitted</Typography>
+        <Typography variant="h3">Thank you for supporting the Terry Fox Run SG {eventYear}!!</Typography>
         <Typography color="text.secondary" sx={{ mt: 1 }}>
-          Your registration is waiting for manual payment confirmation by the Terry Fox Run team.
+          See you at the run! Transaction is pending manual verification.
         </Typography>
       </Box>
       {error ? <Alert severity="warning">{error}</Alert> : null}

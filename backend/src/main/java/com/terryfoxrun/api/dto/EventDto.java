@@ -22,7 +22,12 @@ public record EventDto(
         List<Integer> donationPresets,
         Integer shirtPrice,
         List<ShirtSizeDto> shirtSizes,
-        BrandingDto branding
+        BrandingDto branding,
+        PaymentInstructionsDto paymentInstructions,
+        EventDetailsDto eventDetails,
+        List<FaqDto> faqs,
+        String contactRecipientEmail,
+        SocialLinksDto socialLinks
 ) {
 
     public record ShirtSizeDto(String type, String size, Integer quantityAvailable) {
@@ -30,5 +35,45 @@ public record EventDto(
 
     public record BrandingDto(String primary, String secondary, String accent) {
     }
-}
 
+    public record PaymentInstructionsDto(
+            String payNowQrImageUrl,
+            String payNowInstruction,
+            String bankName,
+            String bankAccountNumber,
+            String bankAccountName,
+            String bankInstruction,
+            String proofBucket
+    ) {
+    }
+
+    public record EventDetailsDto(
+            String scheduleSummary,
+            String routeNotes,
+            String tshirtTitle,
+            String tshirtDescription,
+            String tshirtFrontImageUrl,
+            String tshirtBackImageUrl,
+            String kidsSizeChartImageUrl,
+            String adultSizeChartImageUrl,
+            String pickupDisclaimer,
+            String donationNote
+    ) {
+    }
+
+    public record FaqDto(
+            String question,
+            String answer,
+            Integer displayOrder,
+            boolean active
+    ) {
+    }
+
+    public record SocialLinksDto(
+            String instagramUrl,
+            String instagramLogoUrl,
+            String facebookUrl,
+            String facebookLogoUrl
+    ) {
+    }
+}

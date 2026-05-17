@@ -21,6 +21,48 @@ export type EventDto = {
   donationPresets?: number[];
   shirtPrice?: number;
   shirtSizes?: ShirtInventoryItem[];
+  paymentInstructions?: PaymentInstructions;
+  eventDetails?: EventDetails;
+  faqs?: FaqItem[];
+  contactRecipientEmail?: string;
+  socialLinks?: SocialLinks;
+};
+
+export type EventDetails = {
+  scheduleSummary?: string;
+  routeNotes?: string;
+  tshirtTitle?: string;
+  tshirtDescription?: string;
+  tshirtFrontImageUrl?: string;
+  tshirtBackImageUrl?: string;
+  kidsSizeChartImageUrl?: string;
+  adultSizeChartImageUrl?: string;
+  pickupDisclaimer?: string;
+  donationNote?: string;
+};
+
+export type FaqItem = {
+  question: string;
+  answer: string;
+  displayOrder: number;
+  active: boolean;
+};
+
+export type SocialLinks = {
+  instagramUrl?: string;
+  instagramLogoUrl?: string;
+  facebookUrl?: string;
+  facebookLogoUrl?: string;
+};
+
+export type PaymentInstructions = {
+  payNowQrImageUrl?: string;
+  payNowInstruction?: string;
+  bankName?: string;
+  bankAccountNumber?: string;
+  bankAccountName?: string;
+  bankInstruction?: string;
+  proofBucket?: string;
 };
 
 export type CategoryDto = {
@@ -53,6 +95,19 @@ export type ShirtInventoryItem = {
   type: string;
   size: string;
   quantityAvailable: number;
+};
+
+export type DailyInventorySold = {
+  date: string;
+  size: string;
+  quantitySold: number;
+};
+
+export type ContactSubmissionRequest = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  message: string;
 };
 
 export type ParticipantInput = {
@@ -157,15 +212,55 @@ async function api<T>(path: string, options?: RequestInit): Promise<T> {
   if (response.status === 204) {
     return undefined as T;
   }
-  return response.json() as Promise<T>;
+  const text = await response.text();
+  if (!text) {
+    return undefined as T;
+  }
+  return JSON.parse(text) as T;
 }
 
 export function getCurrentEvent() {
   return api<EventDto>("/api/events/current");
 }
 
+export function getEvents() {
+  return api<EventDto[]>("/api/events");
+}
+
 export function getEvent(id: number) {
   return api<EventDto>(`/api/events/${id}`);
+}
+
+export function createEvent(request: EventDto) {
+  return api<EventDto>("/api/events", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export function updateEvent(id: number, request: EventDto) {
+  return api<EventDto>(`/api/events/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(request),
+  });
+}
+
+export function copyEvent(id: number) {
+  return api<EventDto>(`/api/events/${id}/copy`, {
+    method: "POST",
+  });
+}
+
+export function setCurrentEvent(id: number) {
+  return api<EventDto>(`/api/events/${id}/current`, {
+    method: "PATCH",
+  });
+}
+
+export function deleteEvent(id: number) {
+  return api<void>(`/api/events/${id}`, {
+    method: "DELETE",
+  });
 }
 
 export function getCategories(eventId: number) {
@@ -187,6 +282,13 @@ export function getFormFields(eventId: number) {
   return api<FormFieldConfig[]>(`/api/events/${eventId}/form-fields`);
 }
 
+export function saveFormFields(eventId: number, fields: FormFieldConfig[]) {
+  return api<FormFieldConfig[]>(`/api/events/${eventId}/form-fields`, {
+    method: "PUT",
+    body: JSON.stringify(fields),
+  });
+}
+
 export function createRegistration(request: RegistrationCreateRequest) {
   return api<RegistrationCreateResponse>("/api/registrations", {
     method: "POST",
@@ -202,6 +304,27 @@ export function submitPayment(
     method: "POST",
     body: JSON.stringify(request),
   });
+}
+
+export async function uploadPaymentProof(options: {
+  bucket: string;
+  file: File;
+  registrationId: number;
+  userId: string;
+}) {
+  const safeName = options.file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+  const path = `${options.userId}/${options.registrationId}/${Date.now()}-${safeName}`;
+  const { data, error } = await supabase.storage.from(options.bucket).upload(path, options.file, {
+    cacheControl: "3600",
+    contentType: options.file.type || undefined,
+    upsert: false,
+  });
+  if (error) {
+    throw error;
+  }
+
+  const signed = await supabase.storage.from(options.bucket).createSignedUrl(data.path, 60 * 60 * 24 * 7);
+  return signed.data?.signedUrl ?? `supabase://${options.bucket}/${data.path}`;
 }
 
 export function getRegistration(id: number) {
@@ -245,6 +368,24 @@ export function exportCsvUrl(eventId: number, exportType: "registrations" | "fin
 
 export function getInventory(eventId: number) {
   return api<ShirtInventoryItem[]>(`/api/events/${eventId}/inventory`);
+}
+
+export function getDailySold(eventId: number, size = "ALL") {
+  return api<DailyInventorySold[]>(`/api/events/${eventId}/inventory/sold-daily?size=${encodeURIComponent(size)}`);
+}
+
+export function updateInventory(eventId: number, items: ShirtInventoryItem[]) {
+  return api<void>(`/api/events/${eventId}/inventory`, {
+    method: "PATCH",
+    body: JSON.stringify(items),
+  });
+}
+
+export function submitContact(eventId: number, request: ContactSubmissionRequest) {
+  return api<{ id: number; status: string }>(`/api/events/${eventId}/contact-submissions`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
 }
 
 export function createCorporateOrder(request: {
