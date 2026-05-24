@@ -43,7 +43,7 @@ export default function EventPage() {
         setEvent(current);
         setCategories(await getCategories(current.id));
       })
-      .catch(() => setError("Start the backend to load live event details."));
+      .catch(() => setError("We could not load the latest event details. Please try again later."));
   }, []);
 
   const title = event ? `${event.name}, ${event.year}` : "Terry Fox Run Singapore";

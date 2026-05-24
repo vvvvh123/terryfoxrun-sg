@@ -514,7 +514,7 @@ test("dashboard and admin payment queue show payment status operations", async (
   await expect(page.getByText("Payment rejected. Inventory was not reduced.")).toBeVisible();
 
   await page.getByRole("tab", { name: "Announcements" }).click();
-  await expect(page.getByText("Mass email preview")).toBeVisible();
+  await expect(page.getByText("Mass email", { exact: true })).toBeVisible();
   await expect(page.getByText("Confirmed participants")).toBeVisible();
   await page.getByLabel("Title").fill("Run day reminder");
   await page.getByLabel("Body", { exact: true }).fill("Bring water and your pickup code.");
@@ -523,7 +523,7 @@ test("dashboard and admin payment queue show payment status operations", async (
   await page.getByLabel("Subject").fill("Run update");
   await page.getByLabel("Email body").fill("See you at the run.");
   await page.getByRole("button", { name: "Save campaign" }).click();
-  await expect(page.getByText("Email campaign preview created.")).toBeVisible();
+  await expect(page.getByText("Email campaign saved.")).toBeVisible();
 
   await page.getByRole("tab", { name: "Corporate" }).click();
   await expect(page.locator('input[value="Bronze"]')).toBeVisible();

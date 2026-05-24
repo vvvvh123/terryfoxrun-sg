@@ -224,7 +224,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (loading || !user || appRole !== "admin") return;
-    loadAdmin(selectedEventId).catch(() => setError("Start the backend to use admin tools."));
+    loadAdmin(selectedEventId).catch(() => setError("Admin tools are temporarily unavailable. Please try again later."));
   }, [appRole, loadAdmin, loading, selectedEventId, user]);
 
   useEffect(() => {
@@ -496,7 +496,7 @@ export default function AdminPage() {
     try {
       await createEmailCampaign(event.id, campaignDraft);
       setCampaignDraft({ audience: "confirmed-participants", subject: "", body: "", sendPreview: true });
-      setMessage("Email campaign preview created.");
+      setMessage("Email campaign saved.");
       await loadAdmin(event.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create email campaign.");
@@ -672,7 +672,7 @@ export default function AdminPage() {
           ))}
           {!events.length ? (
             <Grid item xs={12}>
-              <Alert severity="info">No events loaded yet. Start the backend or create the first event.</Alert>
+              <Alert severity="info">No events are available yet. Create the first event to begin setup.</Alert>
             </Grid>
           ) : null}
         </Grid>
@@ -925,7 +925,7 @@ export default function AdminPage() {
             </Grid>
             <Grid item xs={12} lg={6}>
               <Stack spacing={2}>
-                <Typography variant="h5">Mass email preview</Typography>
+                <Typography variant="h5">Mass email</Typography>
                 <Typography color="text.secondary">Choose a fixed audience segment for the selected event.</Typography>
                 <Stack spacing={1} sx={{ maxHeight: 260, overflowY: "auto", pr: 0.5 }}>
                   {emailAudiences.map((audience) => (
@@ -956,7 +956,7 @@ export default function AdminPage() {
                 </Stack>
                 <TextField fullWidth label="Subject" value={campaignDraft.subject} onChange={(e) => setCampaignDraft({ ...campaignDraft, subject: e.target.value })} />
                 <TextField fullWidth multiline minRows={4} label="Email body" value={campaignDraft.body} onChange={(e) => setCampaignDraft({ ...campaignDraft, body: e.target.value })} />
-                <FormControlLabel control={<Switch checked={campaignDraft.sendPreview} onChange={(e) => setCampaignDraft({ ...campaignDraft, sendPreview: e.target.checked })} />} label="Create local email preview" />
+                <FormControlLabel control={<Switch checked={campaignDraft.sendPreview} onChange={(e) => setCampaignDraft({ ...campaignDraft, sendPreview: e.target.checked })} />} label="Create email preview" />
                 <Button variant="contained" sx={{ alignSelf: "flex-start" }} onClick={handleCreateCampaign}>
                   Save campaign
                 </Button>
@@ -1516,7 +1516,7 @@ export default function AdminPage() {
           <Stack spacing={2}>
             <Box>
               <Typography variant="h5">Roles</Typography>
-              <Typography color="text.secondary">View Supabase Auth user roles. Role changes are still made manually in Supabase for v1.</Typography>
+              <Typography color="text.secondary">View Supabase Auth user roles. Role changes are managed in Supabase.</Typography>
             </Box>
             {!roleUsers?.configured ? (
               <Alert severity="info">

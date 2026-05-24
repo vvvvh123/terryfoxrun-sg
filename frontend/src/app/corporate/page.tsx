@@ -40,7 +40,7 @@ export default function CorporatePage() {
         setPackages(configuredPackages);
         setSelectedPackageId(configuredPackages[0]?.id ?? "");
       })
-      .catch(() => setError("Start the backend to submit corporate orders."));
+      .catch(() => setError("We could not load corporate ordering. Please try again later."));
   }, []);
 
   const selectedPackage = packages.find((pkg) => pkg.id === selectedPackageId);

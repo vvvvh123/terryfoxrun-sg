@@ -6,7 +6,7 @@ import Grid from "@mui/material/GridLegacy";
 const pastRuns = [
   { year: "2025", title: "Angsana Green, East Coast Park", note: "Event history, gallery links, and transaction records remain available year to year." },
   { year: "2024", title: "Singapore community run", note: "Past run pages can keep photos, sponsors, highlights, and committee notes together." },
-  { year: "2023", title: "Archive placeholder", note: "Admin can expand this archive as historical material is gathered." },
+  { year: "2023", title: "Singapore run archive", note: "This archive can grow as historical photos, sponsors, and highlights are gathered." },
 ];
 
 export default function PastRunsPage() {

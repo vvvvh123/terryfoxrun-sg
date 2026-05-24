@@ -53,7 +53,7 @@ export default function Home() {
           setSlides(configuredSlides);
         }
       })
-      .catch(() => setError("Using proposal preview data until the local backend is running."));
+      .catch(() => setError("We could not load the latest event details. Please try again later."));
   }, []);
 
   useEffect(() => {
@@ -163,7 +163,7 @@ export default function Home() {
               </Stack>
             </Paper>
             <Paper sx={{ p: 3, flexGrow: 1 }}>
-              <Typography variant="h5">MVP focus</Typography>
+              <Typography variant="h5">Website highlights</Typography>
               <Grid container spacing={1.5} sx={{ mt: 1 }}>
                 {[
                   "Mobile-first registration",

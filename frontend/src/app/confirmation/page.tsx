@@ -24,7 +24,7 @@ function ConfirmationContent() {
     }
     getRegistration(Number(id))
       .then(setRegistration)
-      .catch(() => setError("Could not load the registration confirmation. Please start the backend and try again."));
+      .catch(() => setError("Could not load the registration confirmation. Please try again later."));
   }, [searchParams]);
 
   const latestPayment = useMemo(() => registration?.paymentAttempts[0], [registration]);
@@ -66,8 +66,8 @@ function ConfirmationContent() {
                 )}
                 <Typography color="text.secondary">
                   {confirmed
-                    ? "A confirmation email preview is generated locally now."
-                    : "A pending-payment email preview is generated locally now. After the admin team verifies payment, the registration changes to confirmed and pickup codes appear in My Events."}
+                    ? "A confirmation email will be prepared for this registration."
+                    : "A pending-payment email will be prepared for this registration. After the admin team verifies payment, the registration changes to confirmed and pickup codes appear in My Events."}
                 </Typography>
               </Stack>
             </Paper>

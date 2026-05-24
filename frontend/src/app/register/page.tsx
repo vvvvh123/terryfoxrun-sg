@@ -146,7 +146,7 @@ export default function RegisterPage() {
         setPrimaryParticipant(emptyParticipant(defaultCategoryId));
         setParticipants([]);
       })
-      .catch(() => setError("Start the backend to submit a real registration."));
+      .catch(() => setError("We could not load registration details. Please try again later."));
   }, []);
 
   const participantShirtOrders = useCallback((participant: ParticipantForm): ShirtOrder[] => {

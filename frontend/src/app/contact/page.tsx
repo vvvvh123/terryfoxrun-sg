@@ -14,7 +14,7 @@ export default function ContactPage() {
   useEffect(() => {
     getCurrentEvent()
       .then(setEvent)
-      .catch(() => setError("Start the backend to submit the contact form."));
+      .catch(() => setError("We could not load the contact form. Please try again later."));
   }, []);
 
   async function handleSubmit() {

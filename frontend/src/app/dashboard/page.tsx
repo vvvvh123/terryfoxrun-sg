@@ -74,7 +74,7 @@ function DashboardContent() {
         setEventDetails(Object.fromEntries(eventEntries));
         setAnnouncements((await Promise.all(uniqueEventIds.map((eventId) => getAnnouncements(eventId, true)))).flat());
       })
-      .catch(() => setError("No registration loaded yet. Complete a registration first, or start the backend."));
+      .catch(() => setError("No registration is available yet. Complete a registration first, or try again later."));
   }, [loading, searchParams, user]);
 
   return (
