@@ -34,6 +34,9 @@ const event = {
     adultSizeChartImageUrl: "/paynow-placeholder.svg",
     pickupDisclaimer: "Please collect your T-shirt during the published pickup window.",
     donationNote: "All net proceeds support cancer research in Singapore.",
+    indemnityText: "I understand the risks of participating in the Terry Fox Run.",
+    pdpaConsentText: "I consent to Terry Fox Run Singapore collecting my registration details for event operations.",
+    refundCancellationText: "T-shirt purchases and donations are non-refundable once confirmed.",
   },
   faqs: [{ question: "Are there race bibs?", answer: "No race bibs are issued for this community run.", displayOrder: 1, active: true }],
   contactRecipientEmail: "committee@example.com",
@@ -68,6 +71,7 @@ const registration = {
   id: 123,
   eventId: 1,
   eventName: event.name,
+  eventYear: event.year,
   payerName: "Alex Tan",
   payerEmail: "alex@example.com",
   status: "WAITING_FOR_PAYMENT_CONFIRMATION",
@@ -84,6 +88,7 @@ const registration = {
       tshirtSize: "M",
       tshirtType: "adult",
       tshirtQty: 1,
+      shirtOrders: [{ size: "M", type: "adult", quantity: 1 }],
       pickupCode: "PU-501",
       pickupStatus: "NOT_COLLECTED",
     },
@@ -91,11 +96,61 @@ const registration = {
   paymentAttempts: [paymentAttempt],
 };
 
+const confirmedRegistration = {
+  ...registration,
+  id: 456,
+  status: "CONFIRMED",
+  paymentStatus: "CONFIRMED",
+  participants: [{ ...registration.participants[0], id: 601, pickupCode: "READY456", pickupStatus: "PENDING" }],
+  paymentAttempts: [{ ...paymentAttempt, id: 21, registrationId: 456, verificationStatus: "CONFIRMED" }],
+};
+
+const announcement = {
+  id: 30,
+  eventId: 1,
+  title: "Pickup reminder",
+  body: "Bring your QR code or manual pickup code.",
+  channelEmail: false,
+  channelDashboard: true,
+  createdBy: "admin",
+};
+
+const corporatePackage = {
+  id: 40,
+  eventId: 1,
+  packageName: "Bronze",
+  price: 50000,
+  shirtAllocationRulesJson: "{\"adult\":{\"M\":10,\"L\":10}}",
+  active: true,
+};
+
+const corporateOrder = {
+  id: 50,
+  eventId: 1,
+  companyName: "Acme Pte Ltd",
+  companyAddress: "1 Corporate Way",
+  uen: "202600001Z",
+  contactName: "Corporate Lead",
+  contactEmail: "lead@example.com",
+  contactPhone: "89990000",
+  corporatePackageId: 40,
+  corporatePackageName: "Bronze",
+  status: "pending",
+  items: [{ id: 51, size: "M", type: "adult", quantity: 5 }],
+};
+
 async function mockBackend(page: Page) {
   await page.route("http://127.0.0.1:8080/api/events", (route) => route.fulfill({ json: [event] }));
   await page.route("http://127.0.0.1:8080/api/events/current", (route) => route.fulfill({ json: event }));
   await page.route("http://127.0.0.1:8080/api/events/1", (route) => route.fulfill({ json: event }));
-  await page.route("http://127.0.0.1:8080/api/events/1/categories", (route) => route.fulfill({ json: categories }));
+  await page.route("http://127.0.0.1:8080/api/events/1/categories", (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({ json: { id: 13, eventId: 1, name: "Accessible 5K", description: "Accessible route", basePrice: 0, isActive: true } });
+    }
+    return route.fulfill({ json: categories });
+  });
+  await page.route("http://127.0.0.1:8080/api/events/1/categories/11", (route) => route.fulfill({ json: { ...categories[0], name: "5K Updated" } }));
+  await page.route("http://127.0.0.1:8080/api/events/1/categories/12", (route) => route.fulfill({ json: categories[1] }));
   await page.route("http://127.0.0.1:8080/api/events/1/slideshow", (route) =>
     route.fulfill({
       json: [
@@ -115,8 +170,102 @@ async function mockBackend(page: Page) {
   await page.route("http://127.0.0.1:8080/api/events/1/inventory/sold-daily**", (route) =>
     route.fulfill({ json: [{ date: "2026-05-17", size: "M", quantitySold: 3 }] }),
   );
+  await page.route("http://127.0.0.1:8080/api/events/1/stats", (route) =>
+    route.fulfill({
+      json: {
+        confirmedAmount: 8500,
+        pendingAmount: 8500,
+        confirmedPaymentCount: 1,
+        pendingPaymentCount: 1,
+        dailyAmounts: [
+          {
+            date: "2026-05-17",
+            confirmedAmount: 8500,
+            pendingAmount: 8500,
+            cumulativeConfirmedAmount: 8500,
+            cumulativePendingAmount: 8500,
+          },
+        ],
+      },
+    }),
+  );
+  await page.route("http://127.0.0.1:8080/api/events/1/registrations**", (route) =>
+    route.fulfill({
+      json: {
+        counts: { total: 2, confirmed: 1, pendingPayment: 1, rejected: 0 },
+        dailyRegistrations: [{ date: "2026-05-17", count: 2 }],
+        registrations: [
+          {
+            id: 456,
+            payerName: "Alex Tan",
+            payerEmail: "alex@example.com",
+            generatedPaymentReference: "TFR2026-12345",
+            status: "CONFIRMED",
+            paymentStatus: "CONFIRMED",
+            totalAmount: 8500,
+            createdAt: "2026-05-17T10:00:00Z",
+            participantCount: 1,
+            shirtSummary: "1 x adult M",
+          },
+        ],
+      },
+    }),
+  );
   await page.route("http://127.0.0.1:8080/api/events/1/form-fields", (route) => route.fulfill({ json: [] }));
+  await page.route("http://127.0.0.1:8080/api/events/1/announcements**", (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({ json: announcement });
+    }
+    return route.fulfill({ json: [announcement] });
+  });
+  await page.route("http://127.0.0.1:8080/api/events/1/email-campaigns**", (route) => {
+    if (route.request().url().endsWith("/audiences")) {
+      return route.fulfill({
+        json: [
+          { key: "all-participants", label: "All registered participants", description: "Every individual registration for this event.", count: 2 },
+          { key: "confirmed-participants", label: "Confirmed participants", description: "Registrations with confirmed payment.", count: 1 },
+          { key: "pending-payment", label: "Waiting for payment confirmation", description: "Participants waiting for admin verification.", count: 1 },
+          { key: "payment-rejected", label: "Payment rejected / needs attention", description: "Participants who need follow-up.", count: 0 },
+          { key: "corporate-contacts", label: "Corporate contacts", description: "Submitted corporate order contacts.", count: 1 },
+          { key: "test-preview", label: "Test preview only", description: "Creates a local preview.", count: 1 },
+        ],
+      });
+    }
+    if (route.request().method() === "POST") {
+      return route.fulfill({ json: { id: 31, eventId: 1, audience: "confirmed-participants", subject: "Run update", body: "See you there.", sentStatus: "PREVIEW_CREATED" } });
+    }
+    return route.fulfill({ json: [] });
+  });
+  await page.route("http://127.0.0.1:8080/api/events/1/corporate-packages**", (route) => {
+    if (route.request().method() === "POST" || route.request().method() === "PATCH") {
+      return route.fulfill({ json: corporatePackage });
+    }
+    return route.fulfill({ json: [corporatePackage] });
+  });
+  await page.route("http://127.0.0.1:8080/api/corporate-orders**", (route) => {
+    if (route.request().method() === "POST") return route.fulfill({ json: 50 });
+    if (route.request().method() === "PATCH") return route.fulfill({ json: { ...corporateOrder, status: "fulfilled" } });
+    return route.fulfill({ json: [corporateOrder] });
+  });
   await page.route("http://127.0.0.1:8080/api/admin/payment-attempts**", (route) => route.fulfill({ json: [paymentAttempt] }));
+  await page.route("http://127.0.0.1:8080/api/admin/roles/users", (route) =>
+    route.fulfill({
+      json: {
+        configured: true,
+        message: "Supabase roles loaded.",
+        counts: { admin: 1, volunteer: 1, participant: 2 },
+        users: [
+          {
+            id: "c56d2ed5-8a58-4e49-a425-4df634188e5c",
+            email: "harlanivikas@gmail.com",
+            appRole: "admin",
+            createdAt: "2026-05-10T10:00:00Z",
+            lastSignInAt: "2026-05-24T10:00:00Z",
+          },
+        ],
+      },
+    }),
+  );
   await page.route("http://127.0.0.1:8080/api/registrations", async (route) => {
     if (route.request().method() === "POST") {
       await route.fulfill({
@@ -133,6 +282,7 @@ async function mockBackend(page: Page) {
     await route.fulfill({ json: [registration] });
   });
   await page.route("http://127.0.0.1:8080/api/registrations/123", (route) => route.fulfill({ json: registration }));
+  await page.route("http://127.0.0.1:8080/api/registrations/456", (route) => route.fulfill({ json: confirmedRegistration }));
   await page.route("http://127.0.0.1:8080/api/registrations/123/payment-attempts", (route) => route.fulfill({ json: paymentAttempt }));
   await page.route("http://127.0.0.1:8080/api/admin/payment-attempts/20/confirm", (route) =>
     route.fulfill({ json: { ...paymentAttempt, verificationStatus: "CONFIRMED", adminTransactionId: "BANK-999" } }),
@@ -141,6 +291,51 @@ async function mockBackend(page: Page) {
     route.fulfill({ json: { ...paymentAttempt, verificationStatus: "PAYMENT_REJECTED", rejectionReason: "Reference mismatch" } }),
   );
   await page.route("http://127.0.0.1:8080/api/events/1/contact-submissions", (route) => route.fulfill({ json: { id: 1, status: "EMAIL_PREVIEW_CREATED" } }));
+  const pickupResult = {
+    result: "READY_FOR_PICKUP",
+    message: "Payment confirmed. Confirm collection when the shirts are handed over.",
+    registrationId: 456,
+    payerName: "Alex Tan",
+    payerEmail: "alex@example.com",
+    paymentStatus: "CONFIRMED",
+    totalAmount: 8500,
+    participantId: 601,
+    participantName: "Alex Tan",
+    categoryName: "5K Fun Run",
+    tshirtSize: "M",
+    tshirtType: "adult",
+    tshirtQty: 1,
+    shirtOrders: [{ size: "M", type: "adult", quantity: 1 }],
+    pickupCode: "READY456",
+    pickupStatus: "PENDING",
+  };
+  await page.route("http://127.0.0.1:8080/api/pickup/lookup", (route) => route.fulfill({ json: pickupResult }));
+  await page.route("http://127.0.0.1:8080/api/pickup/collect", (route) => route.fulfill({
+    json: {
+      ...pickupResult,
+      result: "COLLECTED",
+      message: "Pickup marked as collected.",
+      pickupStatus: "COLLECTED",
+      pickupTimestamp: "2026-11-21T10:00:00Z",
+    },
+  }));
+  await page.route("http://127.0.0.1:8080/api/pickup/history**", (route) => route.fulfill({ json: [{ ...pickupResult, result: "ALREADY_COLLECTED", pickupStatus: "COLLECTED", pickupTimestamp: "2026-11-21T10:00:00Z" }] }));
+  await page.route("http://127.0.0.1:8080/api/pickup/events/1/summary", (route) => route.fulfill({
+    json: {
+      collectedCount: 1,
+      pendingCount: 4,
+      collected: [{
+        participantId: 601,
+        registrationId: 456,
+        participantName: "Alex Tan",
+        pickupCode: "READY456",
+        tshirtSize: "M",
+        tshirtType: "adult",
+        tshirtQty: 1,
+        pickupTimestamp: "2026-11-21T10:00:00Z",
+      }],
+    },
+  }));
 }
 
 async function mockSignedInAdmin(page: Page) {
@@ -174,15 +369,35 @@ test.beforeEach(async ({ page }) => {
   await mockBackend(page);
 });
 
-test("email login page starts Supabase magic-link sign in", async ({ page }) => {
-  await page.route("https://lhpondhrhnjnimvyozdc.supabase.co/auth/v1/otp**", (route) => route.fulfill({ json: {} }));
+test("email login page signs in with password", async ({ page }) => {
+  await page.route("https://lhpondhrhnjnimvyozdc.supabase.co/auth/v1/token**", (route) =>
+    route.fulfill({
+      json: {
+        access_token: "test-access-token",
+        refresh_token: "test-refresh-token",
+        token_type: "bearer",
+        expires_in: 3600,
+        user: {
+          id: "c56d2ed5-8a58-4e49-a425-4df634188e5c",
+          aud: "authenticated",
+          role: "authenticated",
+          email: "harlanivikas@gmail.com",
+          app_metadata: { app_role: "admin" },
+          user_metadata: {},
+        },
+      },
+    }),
+  );
 
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Email address").fill("harlanivikas@gmail.com");
-  await page.getByRole("button", { name: "Send sign-in link" }).click();
+  await page.getByLabel("Password").fill("terryfoxrun");
+  await page.getByRole("button", { name: "Sign in" }).click();
 
-  await expect(page.getByText("Check your email for the sign-in link.")).toBeVisible();
+  await expect(page).toHaveURL("/");
+  await expect(page.getByText("Successfully signed in.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Terry Fox Run Singapore, 2026" })).toBeVisible();
 });
 
 test("public pages and mobile-first registration checkout flow", async ({ page }) => {
@@ -219,6 +434,9 @@ test("public pages and mobile-first registration checkout flow", async ({ page }
   await expect(page.getByText("Please collect your T-shirt during the published pickup window.")).toBeVisible();
   await expect(page.getByText("All net proceeds support cancer research in Singapore.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Size charts" })).toBeVisible();
+  await expect(page.getByText("I understand the risks of participating in the Terry Fox Run.")).toBeVisible();
+  await expect(page.getByText("I consent to Terry Fox Run Singapore collecting my registration details for event operations.")).toBeVisible();
+  await expect(page.getByText("T-shirt purchases and donations are non-refundable once confirmed.")).toBeVisible();
   const overviewBox = await page.getByRole("heading", { name: "Terry Fox Run Singapore, 2026" }).boundingBox();
   const shirtBox = await page.getByText("2026 Terry Fox Run T-Shirt").boundingBox();
   const payerBox = await page.getByRole("heading", { name: "Payer and primary participant" }).boundingBox();
@@ -233,8 +451,8 @@ test("public pages and mobile-first registration checkout flow", async ({ page }
   await page.getByLabel("NRIC / Passport / FIN").fill("S1234567A");
   await page.getByLabel("Blood type").fill("O+");
   await page.getByLabel("Address in Singapore").fill("1 Orchard Road, Singapore");
-  await page.getByLabel("T-shirt quantity").fill("1");
-  await page.getByLabel(/I agree to the indemnity and PDPA consent wording/).check();
+  await page.getByLabel("Primary M quantity").fill("1");
+  await page.getByLabel(/I have read and agree to the indemnity, PDPA consent, and refund\/cancellation terms/).check();
   await page.getByRole("button", { name: "Continue to payment" }).click();
 
   await expect(page.getByRole("heading", { name: "Checkout" })).toBeVisible();
@@ -251,13 +469,42 @@ test("public pages and mobile-first registration checkout flow", async ({ page }
 test("dashboard and admin payment queue show payment status operations", async ({ page }) => {
   await page.goto("/dashboard?registrationId=123");
   await expect(page.getByRole("heading", { name: "My Events" })).toBeVisible();
-  await expect(page.getByText("Waiting for payment confirmation")).toBeVisible();
+  await expect(page.getByText("Pickup reminder")).toBeVisible();
+  await expect(page.getByText("Waiting for payment confirmation.")).toBeVisible();
   await expect(page.getByText("Released after confirmation")).toBeVisible();
+
+  await page.goto("/dashboard?registrationId=456");
+  await expect(page.getByText("Payment confirmed")).toBeVisible();
+  await expect(page.getByText("Terry Fox Run Singapore 2026")).toBeVisible();
+  await expect(page.getByText("READY456")).toBeVisible();
+  await page.getByRole("button", { name: "Receipt" }).click();
+  await expect(page.getByRole("heading", { name: "Receipt" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Pickup instructions" }).click();
+  await expect(page.getByRole("heading", { name: "Pickup instructions" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.goto("/volunteer");
+  await expect(page.getByRole("heading", { name: "Volunteer Pickup" })).toBeVisible();
+  await page.getByLabel("Pickup code").fill("READY456");
+  await page.getByRole("button", { name: "Check pickup" }).click();
+  await expect(page.getByText("READY FOR PICKUP.", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Mark collected" }).click();
+  await expect(page.getByText("COLLECTED.", { exact: true })).toBeVisible();
 
   await page.goto("/admin");
   await expect(page.getByRole("heading", { name: "Admin Portal" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Event hub" })).toBeVisible();
+  await expect(page.getByText("Confirmed amount raised")).toBeVisible();
+  await expect(page.getByText("$85.00").first()).toBeVisible();
+
+  await page.getByRole("tab", { name: "Registrations" }).click();
+  await expect(page.getByText("Total registrations")).toBeVisible();
+  await expect(page.getByText("Registrations over time")).toBeVisible();
+  await page.getByLabel("Search registrations").fill("Alex");
   await expect(page.getByText("Alex Tan")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Payments" }).click();
   await page.getByLabel("Admin transaction ID / bank reference").fill("BANK-999");
   await page.getByRole("button", { name: "Confirm payment" }).click();
   await expect(page.getByText("Payment confirmed and inventory updated.")).toBeVisible();
@@ -265,6 +512,46 @@ test("dashboard and admin payment queue show payment status operations", async (
   await page.getByLabel("Rejection reason").fill("Reference mismatch");
   await page.getByRole("button", { name: "Reject payment" }).click();
   await expect(page.getByText("Payment rejected. Inventory was not reduced.")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Announcements" }).click();
+  await expect(page.getByText("Mass email preview")).toBeVisible();
+  await expect(page.getByText("Confirmed participants")).toBeVisible();
+  await page.getByLabel("Title").fill("Run day reminder");
+  await page.getByLabel("Body", { exact: true }).fill("Bring water and your pickup code.");
+  await page.getByRole("button", { name: "Create announcement" }).click();
+  await expect(page.getByText("Announcement created.")).toBeVisible();
+  await page.getByLabel("Subject").fill("Run update");
+  await page.getByLabel("Email body").fill("See you at the run.");
+  await page.getByRole("button", { name: "Save campaign" }).click();
+  await expect(page.getByText("Email campaign preview created.")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Corporate" }).click();
+  await expect(page.locator('input[value="Bronze"]')).toBeVisible();
+  await expect(page.getByLabel("Bronze M quantity")).toHaveValue("10");
+  await expect(page.getByText("Acme Pte Ltd")).toBeVisible();
+  await page.getByRole("button", { name: "Save corporate packages" }).click();
+  await expect(page.getByText("Corporate packages saved.")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Registration Fields" }).click();
+  await expect(page.getByRole("heading", { name: "Categories", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Add category" }).click();
+  await page.getByLabel("Category name").last().fill("Accessible 5K");
+  await page.getByRole("button", { name: "Save categories" }).click();
+  await expect(page.getByText("Categories saved.")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Event Setup" }).click();
+  await expect(page.getByLabel("Indemnity wording")).toHaveValue("I understand the risks of participating in the Terry Fox Run.");
+  await expect(page.getByLabel("PDPA consent wording")).toHaveValue("I consent to Terry Fox Run Singapore collecting my registration details for event operations.");
+  await expect(page.getByLabel("Refund / cancellation wording")).toHaveValue("T-shirt purchases and donations are non-refundable once confirmed.");
+
+  await page.getByRole("tab", { name: "Pickup" }).click();
+  await expect(page.getByRole("heading", { name: "Pickup visibility" })).toBeVisible();
+  await expect(page.getByText("READY456")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Roles" }).click();
+  await expect(page.getByText("View Supabase Auth user roles.")).toBeVisible();
+  await expect(page.getByText("harlanivikas@gmail.com")).toBeVisible();
+  await expect(page.getByText("Admins", { exact: true })).toBeVisible();
 
   await page.getByRole("tab", { name: "Exports" }).click();
   await expect(page.getByRole("link", { name: "Registrations CSV" })).toHaveAttribute("href", /registrations\.csv/);

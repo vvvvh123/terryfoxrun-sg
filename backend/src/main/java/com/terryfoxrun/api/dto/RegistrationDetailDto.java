@@ -7,6 +7,7 @@ public record RegistrationDetailDto(
         Long id,
         Long eventId,
         String eventName,
+        Integer eventYear,
         String payerName,
         String payerEmail,
         String payerIdentityNumber,
@@ -34,6 +35,7 @@ public record RegistrationDetailDto(
             String tshirtSize,
             String tshirtType,
             Integer tshirtQty,
+            List<RegistrationQuoteRequest.ShirtOrderDto> shirtOrders,
             String pickupCode,
             String pickupStatus
     ) {

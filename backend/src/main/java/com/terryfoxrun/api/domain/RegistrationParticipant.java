@@ -35,6 +35,7 @@ public class RegistrationParticipant {
     private String pickupCode;
     private String pickupStatus;
     private LocalDateTime pickupTimestamp;
+    private String pickupCollectedBy;
 
     public Long getId() {
         return id;
@@ -191,5 +192,12 @@ public class RegistrationParticipant {
     public void setPickupTimestamp(LocalDateTime pickupTimestamp) {
         this.pickupTimestamp = pickupTimestamp;
     }
-}
 
+    public String getPickupCollectedBy() {
+        return pickupCollectedBy;
+    }
+
+    public void setPickupCollectedBy(String pickupCollectedBy) {
+        this.pickupCollectedBy = pickupCollectedBy;
+    }
+}

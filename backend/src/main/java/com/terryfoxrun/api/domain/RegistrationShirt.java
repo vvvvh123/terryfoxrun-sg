@@ -13,6 +13,10 @@ public class RegistrationShirt {
     @JoinColumn(name = "registration_id")
     private Registration registration;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "participant_id")
+    private RegistrationParticipant participant;
+
     private String size;
     private String type;
     private Integer quantity;
@@ -28,6 +32,14 @@ public class RegistrationShirt {
 
     public void setRegistration(Registration registration) {
         this.registration = registration;
+    }
+
+    public RegistrationParticipant getParticipant() {
+        return participant;
+    }
+
+    public void setParticipant(RegistrationParticipant participant) {
+        this.participant = participant;
     }
 
     public String getSize() {
@@ -62,4 +74,3 @@ public class RegistrationShirt {
         this.source = source;
     }
 }
-

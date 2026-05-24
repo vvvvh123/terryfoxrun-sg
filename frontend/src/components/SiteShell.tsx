@@ -1,20 +1,45 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { AppBar, Box, Button, Container, Stack, Toolbar, Typography } from "@mui/material";
+import { Alert, AppBar, Box, Button, Container, Snackbar, Stack, Toolbar, Typography } from "@mui/material";
 import { useAuth } from "@/components/AuthProvider";
 
 export default function SiteShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { appRole, loading, signOut, user } = useAuth();
+  const [authNotice, setAuthNotice] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const auth = params.get("auth");
+    if (auth === "signed-in") {
+      setAuthNotice("Successfully signed in.");
+    } else if (auth === "signed-out") {
+      setAuthNotice("Successfully signed out.");
+    }
+    if (auth) {
+      params.delete("auth");
+      const query = params.toString();
+      window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+    }
+  }, [pathname]);
+
+  async function handleSignOut() {
+    await signOut();
+    window.location.assign("/?auth=signed-out");
+  }
+
   const navItems = [
-    { href: "/event", label: "Event" },
+    { href: "/", label: "Home" },
     { href: "/terrys-story", label: "Terry's Story" },
+    { href: "/event", label: "Event" },
     { href: "/register", label: "Register" },
     { href: "/corporate", label: "Corporate" },
     { href: "/dashboard", label: "My Events" },
     { href: "/contact", label: "Contact Us" },
+    ...(appRole === "admin" || appRole === "volunteer" ? [{ href: "/volunteer", label: "Volunteer" }] : []),
     ...(appRole === "admin" ? [{ href: "/admin", label: "Admin" }] : []),
   ];
 
@@ -60,7 +85,7 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
             </Button>
           </Stack>
           {user ? (
-            <Button onClick={() => signOut()} variant="outlined" color="inherit" sx={{ color: "white", borderColor: "rgba(255,255,255,.65)" }}>
+            <Button onClick={handleSignOut} variant="outlined" color="inherit" sx={{ color: "white", borderColor: "rgba(255,255,255,.65)" }}>
               Sign out
             </Button>
           ) : (
@@ -73,6 +98,16 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
       <Container maxWidth="xl" sx={{ px: { xs: 2, md: 4 }, py: { xs: 3, md: 5 } }}>
         {children}
       </Container>
+      <Snackbar
+        open={Boolean(authNotice)}
+        autoHideDuration={4000}
+        onClose={() => setAuthNotice("")}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+      >
+        <Alert severity="success" variant="filled" onClose={() => setAuthNotice("")}>
+          {authNotice}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

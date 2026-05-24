@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Alert,
@@ -27,7 +27,7 @@ import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import QrCode2Icon from "@mui/icons-material/QrCode2";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
-import { CategoryDto, EventDto, FormFieldConfig, ParticipantInput, RegistrationCreateResponse, createRegistration, getCategories, getCurrentEvent, getFormFields, submitPayment, uploadPaymentProof } from "@/lib/api";
+import { CategoryDto, EventDto, FormFieldConfig, ParticipantInput, RegistrationCreateResponse, ShirtOrder, createRegistration, getCategories, getCurrentEvent, getFormFields, submitPayment, uploadPaymentProof } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 import { defaultFormFields, isFieldRequired, isFieldVisible } from "@/lib/registrationFields";
 
@@ -36,8 +36,7 @@ type ParticipantForm = {
   email: string;
   phone: string;
   categoryId: number;
-  tshirtSize: string;
-  tshirtQty: number;
+  shirtOrders: Record<string, number>;
 };
 
 const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
@@ -67,8 +66,7 @@ const emptyParticipant = (categoryId = 0): ParticipantForm => ({
   email: "",
   phone: "",
   categoryId,
-  tshirtSize: "M",
-  tshirtQty: 0,
+  shirtOrders: {},
 });
 
 function TShirtImage({ src, alt }: { src?: string; alt: string }) {
@@ -88,6 +86,19 @@ function TShirtImage({ src, alt }: { src?: string; alt: string }) {
         p: 1,
       }}
     />
+  );
+}
+
+const fallbackLegalText = "Terms to be confirmed by the event organiser.";
+
+function LegalTextBlock({ title, body }: { title: string; body?: string }) {
+  return (
+    <Box sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
+      <Typography fontWeight={800}>{title}</Typography>
+      <Typography color="text.secondary" sx={{ mt: 0.75, whiteSpace: "pre-line" }}>
+        {body?.trim() || fallbackLegalText}
+      </Typography>
+    </Box>
   );
 }
 
@@ -138,11 +149,17 @@ export default function RegisterPage() {
       .catch(() => setError("Start the backend to submit a real registration."));
   }, []);
 
+  const participantShirtOrders = useCallback((participant: ParticipantForm): ShirtOrder[] => {
+    return availableSizes
+      .map((size) => ({ size, type: shirtType, quantity: Number(participant.shirtOrders[size] || 0) }))
+      .filter((shirt) => shirt.quantity > 0);
+  }, [availableSizes, shirtType]);
+
   const total = useMemo(() => {
     const allParticipants = [primaryParticipant, ...participants];
-    const shirts = allParticipants.reduce((sum, participant) => sum + Number(participant.tshirtQty || 0) * shirtPrice, 0);
+    const shirts = allParticipants.reduce((sum, participant) => sum + participantShirtOrders(participant).reduce((shirtSum, shirt) => shirtSum + Number(shirt.quantity || 0) * shirtPrice, 0), 0);
     return shirts + Number(donationAmount || 0) * 100;
-  }, [donationAmount, participants, primaryParticipant, shirtPrice]);
+  }, [donationAmount, participantShirtOrders, participants, primaryParticipant, shirtPrice]);
 
   function updateParticipant(index: number, patch: Partial<ParticipantForm>) {
     setParticipants((current) => current.map((participant, currentIndex) => (currentIndex === index ? { ...participant, ...patch } : participant)));
@@ -150,6 +167,16 @@ export default function RegisterPage() {
 
   function updatePrimaryParticipant(patch: Partial<ParticipantForm>) {
     setPrimaryParticipant((current) => ({ ...current, ...patch }));
+  }
+
+  function updateParticipantShirt(participant: ParticipantForm, size: string, quantity: number): ParticipantForm {
+    return {
+      ...participant,
+      shirtOrders: {
+        ...participant.shirtOrders,
+        [size]: Math.max(0, quantity),
+      },
+    };
   }
 
   function validateRegistration() {
@@ -167,7 +194,7 @@ export default function RegisterPage() {
     const allParticipants = [primaryParticipant, ...participants];
     const missingCategoryIndex = allParticipants.findIndex((participant) => !participant.categoryId);
     if (missingCategoryIndex >= 0) return `Please choose a category for ${missingCategoryIndex === 0 ? "the primary participant" : `additional participant ${missingCategoryIndex}`}.`;
-    const negativeShirtIndex = allParticipants.findIndex((participant) => Number(participant.tshirtQty || 0) < 0);
+    const negativeShirtIndex = allParticipants.findIndex((participant) => Object.values(participant.shirtOrders).some((quantity) => Number(quantity || 0) < 0));
     if (negativeShirtIndex >= 0) return "T-shirt quantity cannot be negative.";
     if (Number(donationAmount || 0) < 0) return "Donation amount cannot be negative.";
     if (!indemnityAccepted) return "Please accept the indemnity and PDPA consent before checkout.";
@@ -177,6 +204,8 @@ export default function RegisterPage() {
   function toParticipantInput(participant: ParticipantForm, index: number): ParticipantInput {
     const fallbackName = index === 0 ? payer.name : `Guest ${index}`;
     const fallbackPhone = participant.phone || "Optional phone not provided";
+    const shirtOrders = participantShirtOrders(participant);
+    const firstShirt = shirtOrders[0];
     return {
       categoryId: participant.categoryId || categories[0]?.id || 1,
       name: participant.name || fallbackName,
@@ -189,9 +218,10 @@ export default function RegisterPage() {
       address: payer.address,
       nricLast4: payer.identity.slice(-4) || "NA",
       medicalNotes: "",
-      tshirtSize: participant.tshirtQty > 0 ? participant.tshirtSize : undefined,
-      tshirtType: participant.tshirtQty > 0 ? shirtType : undefined,
-      tshirtQty: Number(participant.tshirtQty || 0),
+      tshirtSize: firstShirt?.size,
+      tshirtType: firstShirt?.type,
+      tshirtQty: firstShirt?.quantity ?? 0,
+      shirtOrders,
     };
   }
 
@@ -226,6 +256,10 @@ export default function RegisterPage() {
       });
       window.localStorage.setItem("lastRegistrationId", String(response.registrationId));
       setCreated(response);
+      if (response.totalAmount === 0 || response.paymentStatus === "CONFIRMED") {
+        router.push(`/confirmation?registrationId=${response.registrationId}`);
+        return;
+      }
       setCheckoutStep("instructions");
       setProofFile(null);
       setMessage("Registration created. Please complete your PayNow or bank-transfer payment.");
@@ -436,30 +470,25 @@ export default function RegisterPage() {
                   </FormControl>
                 </Grid>
                 {visible("tshirtSize") ? (
-                  <Grid item xs={6} md={4}>
-                    <FormControl fullWidth>
-                      <InputLabel>T-shirt size</InputLabel>
-                      <Select label="T-shirt size" value={primaryParticipant.tshirtSize} onChange={(e) => updatePrimaryParticipant({ tshirtSize: e.target.value })}>
-                        {availableSizes.map((size) => (
-                          <MenuItem key={size} value={size}>
-                            {size}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                  <Grid item xs={12}>
+                    <Typography fontWeight={800} sx={{ mb: 1 }}>T-shirts</Typography>
+                    <Grid container spacing={1.25}>
+                      {availableSizes.map((size) => (
+                        <Grid item xs={6} sm={4} md={2} key={size}>
+                          <TextField
+                            fullWidth
+                            type="number"
+                            label={size}
+                            value={primaryParticipant.shirtOrders[size] ?? 0}
+                            inputProps={{ min: 0, "aria-label": `Primary ${size} quantity` }}
+                            onChange={(e) => updatePrimaryParticipant(updateParticipantShirt(primaryParticipant, size, Number(e.target.value)))}
+                          />
+                        </Grid>
+                      ))}
+                    </Grid>
+                    <Typography variant="caption" color="text.secondary">Use 0 for every size if you only want to register/donate.</Typography>
                   </Grid>
                 ) : null}
-                <Grid item xs={6} md={4}>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="T-shirt quantity"
-                    value={primaryParticipant.tshirtQty}
-                    inputProps={{ min: 0 }}
-                    helperText="Use 0 if you only want to register/donate."
-                    onChange={(e) => updatePrimaryParticipant({ tshirtQty: Math.max(0, Number(e.target.value)) })}
-                  />
-                </Grid>
               </Grid>
             </Paper>
             <Paper sx={{ p: 3 }}>
@@ -508,29 +537,24 @@ export default function RegisterPage() {
                         </FormControl>
                       </Grid>
                       {visible("tshirtSize") ? (
-                        <Grid item xs={6} md={4}>
-                          <FormControl fullWidth>
-                            <InputLabel>T-shirt size</InputLabel>
-                            <Select label="T-shirt size" value={participant.tshirtSize} onChange={(e) => updateParticipant(index, { tshirtSize: e.target.value })}>
-                              {availableSizes.map((size) => (
-                                <MenuItem key={size} value={size}>
-                                  {size}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
+                        <Grid item xs={12}>
+                          <Typography fontWeight={800} sx={{ mb: 1 }}>T-shirts</Typography>
+                          <Grid container spacing={1.25}>
+                            {availableSizes.map((size) => (
+                              <Grid item xs={6} sm={4} md={2} key={size}>
+                                <TextField
+                                  fullWidth
+                                  type="number"
+                                  label={size}
+                                  value={participant.shirtOrders[size] ?? 0}
+                                  inputProps={{ min: 0, "aria-label": `Additional participant ${index + 1} ${size} quantity` }}
+                                  onChange={(e) => updateParticipant(index, updateParticipantShirt(participant, size, Number(e.target.value)))}
+                                />
+                              </Grid>
+                            ))}
+                          </Grid>
                         </Grid>
                       ) : null}
-                      <Grid item xs={6} md={4}>
-                        <TextField
-                          fullWidth
-                          type="number"
-                          label="T-shirt quantity"
-                          value={participant.tshirtQty}
-                          inputProps={{ min: 0 }}
-                          onChange={(e) => updateParticipant(index, { tshirtQty: Math.max(0, Number(e.target.value)) })}
-                        />
-                      </Grid>
                     </Grid>
                   </Box>
                 ))}
@@ -578,10 +602,18 @@ export default function RegisterPage() {
                 <Typography color="text.secondary">Estimated total</Typography>
                 <Typography variant="h4">{formatMoney(total)}</Typography>
               </Box>
+              <Box sx={{ mt: 2 }}>
+                <Typography fontWeight={800}>Event terms</Typography>
+                <Stack spacing={1.25} sx={{ mt: 1 }}>
+                  <LegalTextBlock title="Indemnity" body={eventDetails?.indemnityText} />
+                  <LegalTextBlock title="PDPA consent" body={eventDetails?.pdpaConsentText} />
+                  <LegalTextBlock title="Refund / cancellation" body={eventDetails?.refundCancellationText} />
+                </Stack>
+              </Box>
               <FormControlLabel
                 sx={{ mt: 2, alignItems: "flex-start" }}
                 control={<Checkbox checked={indemnityAccepted} onChange={(e) => setIndemnityAccepted(e.target.checked)} />}
-                label={`${required("indemnity") ? "* " : ""}I agree to the indemnity and PDPA consent wording for this event.`}
+                label={`${required("indemnity") ? "* " : ""}I have read and agree to the indemnity, PDPA consent, and refund/cancellation terms for this event.`}
               />
               <Button fullWidth variant="contained" size="large" sx={{ mt: 2 }} disabled={!indemnityAccepted || !event || !user} onClick={handleCreateRegistration}>
                 Continue to payment

@@ -57,7 +57,10 @@ public record EventDto(
             String kidsSizeChartImageUrl,
             String adultSizeChartImageUrl,
             String pickupDisclaimer,
-            String donationNote
+            String donationNote,
+            String indemnityText,
+            String pdpaConsentText,
+            String refundCancellationText
     ) {
     }
 

@@ -29,6 +29,10 @@ app:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
   payments:
     reference-prefix: ${PAYMENT_REFERENCE_PREFIX:TFR}
+  supabase:
+    url: ${SUPABASE_URL:${NEXT_PUBLIC_SUPABASE_URL:https://lhpondhrhnjnimvyozdc.supabase.co}}
+    service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
+    secret-key: ${SUPABASE_SECRET_KEY:}
 
 # TODO: configure Supabase Auth, datasource, mail provider, and object storage.
 

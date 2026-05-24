@@ -39,6 +39,9 @@ export type EventDetails = {
   adultSizeChartImageUrl?: string;
   pickupDisclaimer?: string;
   donationNote?: string;
+  indemnityText?: string;
+  pdpaConsentText?: string;
+  refundCancellationText?: string;
 };
 
 export type FaqItem = {
@@ -72,6 +75,67 @@ export type CategoryDto = {
   description?: string;
   basePrice?: number;
   isActive: boolean;
+};
+
+export type Announcement = {
+  id: number;
+  eventId: number;
+  title: string;
+  body: string;
+  channelEmail: boolean;
+  channelDashboard: boolean;
+  createdBy?: string;
+  createdAt?: string;
+};
+
+export type EmailCampaign = {
+  id: number;
+  eventId: number;
+  audience: string;
+  subject: string;
+  body: string;
+  sentStatus: string;
+  createdBy?: string;
+  createdAt?: string;
+  sentAt?: string;
+};
+
+export type CorporatePackage = {
+  id?: number;
+  eventId?: number;
+  packageName: string;
+  price: number;
+  shirtAllocationRulesJson: string;
+  active: boolean;
+};
+
+export type EmailAudienceSegment = {
+  key: string;
+  label: string;
+  description: string;
+  count: number;
+};
+
+export type ShirtOrder = {
+  size: string;
+  type: string;
+  quantity: number;
+};
+
+export type CorporateOrder = {
+  id: number;
+  eventId: number;
+  companyName: string;
+  companyAddress: string;
+  uen: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  corporatePackageId?: number;
+  corporatePackageName?: string;
+  status: string;
+  createdAt?: string;
+  items: { id?: number; size: string; type: string; quantity: number }[];
 };
 
 export type SlideshowImage = {
@@ -125,6 +189,7 @@ export type ParticipantInput = {
   tshirtSize?: string;
   tshirtType?: string;
   tshirtQty?: number;
+  shirtOrders?: ShirtOrder[];
 };
 
 export type RegistrationCreateRequest = {
@@ -172,6 +237,7 @@ export type RegistrationDetail = {
   id: number;
   eventId: number;
   eventName: string;
+  eventYear?: number;
   payerName: string;
   payerEmail: string;
   status: string;
@@ -188,10 +254,105 @@ export type RegistrationDetail = {
     tshirtSize?: string;
     tshirtType?: string;
     tshirtQty?: number;
+    shirtOrders?: ShirtOrder[];
     pickupCode?: string;
     pickupStatus?: string;
   }[];
   paymentAttempts: PaymentAttempt[];
+};
+
+export type PickupResult = {
+  result: "COLLECTED" | "ALREADY_COLLECTED" | "PAYMENT_NOT_CONFIRMED" | string;
+  message: string;
+  registrationId: number;
+  payerName: string;
+  payerEmail: string;
+  paymentStatus: string;
+  totalAmount: number;
+  participantId: number;
+  participantName: string;
+  categoryName?: string;
+  tshirtSize?: string;
+  tshirtType?: string;
+  tshirtQty?: number;
+  shirtOrders?: ShirtOrder[];
+  pickupCode: string;
+  pickupStatus: string;
+  pickupTimestamp?: string;
+  pickupCollectedBy?: string;
+};
+
+export type PickupSummary = {
+  collectedCount: number;
+  pendingCount: number;
+  collected: {
+    participantId: number;
+    registrationId: number;
+    participantName: string;
+    pickupCode: string;
+    tshirtSize?: string;
+    tshirtType?: string;
+    tshirtQty?: number;
+    pickupTimestamp?: string;
+  }[];
+};
+
+export type RoleUser = {
+  id: string;
+  email: string;
+  appRole: string;
+  createdAt?: string;
+  lastSignInAt?: string;
+};
+
+export type RoleUsersResponse = {
+  users: RoleUser[];
+  counts: {
+    admin: number;
+    volunteer: number;
+    participant: number;
+  };
+  configured: boolean;
+  message: string;
+};
+
+export type EventStats = {
+  confirmedAmount: number;
+  pendingAmount: number;
+  confirmedPaymentCount: number;
+  pendingPaymentCount: number;
+  dailyAmounts: {
+    date: string;
+    confirmedAmount: number;
+    pendingAmount: number;
+    cumulativeConfirmedAmount: number;
+    cumulativePendingAmount: number;
+  }[];
+};
+
+export type AdminRegistrationReport = {
+  counts: {
+    total: number;
+    confirmed: number;
+    pendingPayment: number;
+    rejected: number;
+  };
+  dailyRegistrations: {
+    date: string;
+    count: number;
+  }[];
+  registrations: {
+    id: number;
+    payerName: string;
+    payerEmail: string;
+    generatedPaymentReference: string;
+    status: string;
+    paymentStatus: string;
+    totalAmount: number;
+    createdAt?: string;
+    participantCount: number;
+    shirtSummary: string;
+  }[];
 };
 
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
@@ -265,6 +426,26 @@ export function deleteEvent(id: number) {
 
 export function getCategories(eventId: number) {
   return api<CategoryDto[]>(`/api/events/${eventId}/categories`);
+}
+
+export function createCategory(eventId: number, request: CategoryDto) {
+  return api<CategoryDto>(`/api/events/${eventId}/categories`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export function updateCategory(eventId: number, categoryId: number, request: CategoryDto) {
+  return api<CategoryDto>(`/api/events/${eventId}/categories/${categoryId}`, {
+    method: "PATCH",
+    body: JSON.stringify(request),
+  });
+}
+
+export function deleteCategory(eventId: number, categoryId: number) {
+  return api<void>(`/api/events/${eventId}/categories/${categoryId}`, {
+    method: "DELETE",
+  });
 }
 
 export function getSlideshow(eventId: number) {
@@ -381,6 +562,105 @@ export function updateInventory(eventId: number, items: ShirtInventoryItem[]) {
   });
 }
 
+export function scanPickup(tokenOrCode: string) {
+  return api<PickupResult>("/api/pickup/scan", {
+    method: "POST",
+    body: JSON.stringify({ tokenOrCode }),
+  });
+}
+
+export function lookupPickup(tokenOrCode: string) {
+  return api<PickupResult>("/api/pickup/lookup", {
+    method: "POST",
+    body: JSON.stringify({ tokenOrCode }),
+  });
+}
+
+export function collectPickup(tokenOrCode: string) {
+  return api<PickupResult>("/api/pickup/collect", {
+    method: "POST",
+    body: JSON.stringify({ tokenOrCode }),
+  });
+}
+
+export function getPickupHistory(filters: { eventId: number; query?: string; status?: string }) {
+  const params = new URLSearchParams({ eventId: String(filters.eventId) });
+  if (filters.query) params.set("query", filters.query);
+  if (filters.status) params.set("status", filters.status);
+  return api<PickupResult[]>(`/api/pickup/history?${params.toString()}`);
+}
+
+export function getPickupSummary(eventId: number) {
+  return api<PickupSummary>(`/api/pickup/events/${eventId}/summary`);
+}
+
+export function getRoleUsers() {
+  return api<RoleUsersResponse>("/api/admin/roles/users");
+}
+
+export function getEventStats(eventId: number) {
+  return api<EventStats>(`/api/events/${eventId}/stats`);
+}
+
+export function getAdminRegistrations(eventId: number, filters: { query?: string; paymentStatus?: string; status?: string } = {}) {
+  const params = new URLSearchParams();
+  if (filters.query) params.set("query", filters.query);
+  if (filters.paymentStatus) params.set("paymentStatus", filters.paymentStatus);
+  if (filters.status) params.set("status", filters.status);
+  const query = params.toString();
+  return api<AdminRegistrationReport>(`/api/events/${eventId}/registrations${query ? `?${query}` : ""}`);
+}
+
+export function getAnnouncements(eventId: number, dashboardOnly = false) {
+  return api<Announcement[]>(`/api/events/${eventId}/announcements${dashboardOnly ? "?dashboardOnly=true" : ""}`);
+}
+
+export function createAnnouncement(eventId: number, request: { title: string; body: string; channelEmail: boolean; channelDashboard: boolean }) {
+  return api<Announcement>(`/api/events/${eventId}/announcements`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export function getEmailCampaigns(eventId: number) {
+  return api<EmailCampaign[]>(`/api/events/${eventId}/email-campaigns`);
+}
+
+export function getEmailAudiences(eventId: number) {
+  return api<EmailAudienceSegment[]>(`/api/events/${eventId}/email-campaigns/audiences`);
+}
+
+export function createEmailCampaign(eventId: number, request: { audience: string; subject: string; body: string; sendPreview: boolean }) {
+  return api<EmailCampaign>(`/api/events/${eventId}/email-campaigns`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export function getCorporatePackages(eventId: number, activeOnly = false) {
+  return api<CorporatePackage[]>(`/api/events/${eventId}/corporate-packages${activeOnly ? "?activeOnly=true" : ""}`);
+}
+
+export function createCorporatePackage(eventId: number, request: CorporatePackage) {
+  return api<CorporatePackage>(`/api/events/${eventId}/corporate-packages`, {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+}
+
+export function updateCorporatePackage(eventId: number, packageId: number, request: CorporatePackage) {
+  return api<CorporatePackage>(`/api/events/${eventId}/corporate-packages/${packageId}`, {
+    method: "PATCH",
+    body: JSON.stringify(request),
+  });
+}
+
+export function deleteCorporatePackage(eventId: number, packageId: number) {
+  return api<void>(`/api/events/${eventId}/corporate-packages/${packageId}`, {
+    method: "DELETE",
+  });
+}
+
 export function submitContact(eventId: number, request: ContactSubmissionRequest) {
   return api<{ id: number; status: string }>(`/api/events/${eventId}/contact-submissions`, {
     method: "POST",
@@ -396,10 +676,21 @@ export function createCorporateOrder(request: {
   contactName: string;
   contactEmail: string;
   contactPhone: string;
+  corporatePackageId?: number;
   items: { size: string; type: string; quantity: number }[];
 }) {
   return api<number>("/api/corporate-orders", {
     method: "POST",
     body: JSON.stringify(request),
+  });
+}
+
+export function getCorporateOrders(eventId: number) {
+  return api<CorporateOrder[]>(`/api/corporate-orders?eventId=${eventId}`);
+}
+
+export function updateCorporateOrderStatus(orderId: number, status: string) {
+  return api<CorporateOrder>(`/api/corporate-orders/${orderId}?status=${encodeURIComponent(status)}`, {
+    method: "PATCH",
   });
 }

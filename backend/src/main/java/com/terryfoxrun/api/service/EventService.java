@@ -197,6 +197,21 @@ public class EventService {
         return toDto(cat);
     }
 
+    @Transactional
+    public CategoryDto updateCategory(Long categoryId, CategoryDto dto) {
+        Category cat = categoryRepository.findById(categoryId).orElseThrow();
+        cat.setName(dto.name());
+        cat.setDescription(dto.description());
+        cat.setBasePrice(dto.basePrice());
+        cat.setActive(dto.isActive());
+        return toDto(categoryRepository.save(cat));
+    }
+
+    @Transactional
+    public void deleteCategory(Long categoryId) {
+        categoryRepository.deleteById(categoryId);
+    }
+
     @Transactional(readOnly = true)
     public List<EventSlideshowImageDto> getSlideshowImages(Long eventId) {
         Event event = eventRepository.findById(eventId).orElseThrow();

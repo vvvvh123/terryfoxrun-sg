@@ -14,7 +14,10 @@ SET event_details_json = '{
   "kidsSizeChartImageUrl": "/paynow-placeholder.svg",
   "adultSizeChartImageUrl": "/paynow-placeholder.svg",
   "pickupDisclaimer": "We appreciate your help to pick up your t-shirt(s) during pickup at the configured pickup location as we are unable to arrange t-shirt pickup outside of these dates. Uncollected t-shirt(s) will be deemed a donation and resold on Run day. Thank you very much for your understanding.",
-  "donationNote": "Your donation and support helps fund bold, innovative cancer research projects in Singapore in pursuit of Terry Fox''s dream of a world without cancer."
+  "donationNote": "Your donation and support helps fund bold, innovative cancer research projects in Singapore in pursuit of Terry Fox''s dream of a world without cancer.",
+  "indemnityText": "I understand that participation in the Terry Fox Run Singapore is voluntary and that running or walking in a public event involves inherent risks. I agree to follow event instructions and participate responsibly.",
+  "pdpaConsentText": "I consent to Terry Fox Run Singapore collecting, using, and disclosing my registration details for event administration, payment verification, T-shirt pickup, safety, communications, and related event operations.",
+  "refundCancellationText": "T-shirt purchases and donations are non-refundable once confirmed. If the event format, venue, or timing changes, the committee will communicate updated arrangements to registered participants."
 }',
 faqs_json = '[
   {"question":"Will there be race packs and bib numbers issued for the Run?","answer":"This is a non-competitive fun run, so there are no race packs or bib numbers issued to participants.","displayOrder":1,"active":true},

@@ -58,6 +58,17 @@ public class LocalEmailService implements EmailService {
                 Instant.now()));
     }
 
+    @Override
+    public void sendCampaignPreview(String audience, String subject, String body) {
+        store(new EmailPreview(
+                "email-campaign-preview",
+                audience,
+                subject,
+                body,
+                null,
+                Instant.now()));
+    }
+
     public List<EmailPreview> sentEmails() {
         return List.copyOf(sentEmails);
     }

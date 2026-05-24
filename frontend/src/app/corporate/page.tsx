@@ -1,14 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Alert, Box, Button, Paper, Stack, TextField, Typography } from "@mui/material";
+import { Alert, Box, Button, FormControl, InputLabel, MenuItem, Paper, Select, Stack, TextField, Typography } from "@mui/material";
 import Grid from "@mui/material/GridLegacy";
-import { createCorporateOrder, getCurrentEvent } from "@/lib/api";
+import { CorporatePackage, createCorporateOrder, getCorporatePackages, getCurrentEvent } from "@/lib/api";
 
 const shirtSizes = ["XS", "S", "M", "L", "XL", "XXL"];
 
+function packageSizes(pkg?: CorporatePackage) {
+  if (!pkg?.shirtAllocationRulesJson) return [];
+  try {
+    return Object.values(JSON.parse(pkg.shirtAllocationRulesJson) as Record<string, Record<string, number>>).flatMap((sizes) => Object.keys(sizes));
+  } catch {
+    return [];
+  }
+}
+
 export default function CorporatePage() {
   const [eventId, setEventId] = useState<number | null>(null);
+  const [packages, setPackages] = useState<CorporatePackage[]>([]);
+  const [selectedPackageId, setSelectedPackageId] = useState<number | "">("");
   const [form, setForm] = useState({
     companyName: "",
     companyAddress: "",
@@ -23,9 +34,18 @@ export default function CorporatePage() {
 
   useEffect(() => {
     getCurrentEvent()
-      .then((event) => setEventId(event.id))
+      .then(async (event) => {
+        setEventId(event.id);
+        const configuredPackages = await getCorporatePackages(event.id, true);
+        setPackages(configuredPackages);
+        setSelectedPackageId(configuredPackages[0]?.id ?? "");
+      })
       .catch(() => setError("Start the backend to submit corporate orders."));
   }, []);
+
+  const selectedPackage = packages.find((pkg) => pkg.id === selectedPackageId);
+  const configuredSizes = packageSizes(selectedPackage);
+  const availableSizes = configuredSizes.length ? Array.from(new Set(configuredSizes)) : shirtSizes;
 
   async function handleSubmit() {
     if (!eventId) return;
@@ -34,7 +54,8 @@ export default function CorporatePage() {
       const id = await createCorporateOrder({
         eventId,
         ...form,
-        items: shirtSizes
+        corporatePackageId: selectedPackage?.id,
+        items: availableSizes
           .map((size) => ({ size, type: "adult", quantity: Number(quantities[size] || 0) }))
           .filter((item) => item.quantity > 0),
       });
@@ -77,8 +98,20 @@ export default function CorporatePage() {
         <Grid item xs={12} md={5}>
           <Paper sx={{ p: 3 }}>
             <Typography variant="h5">Shirt quantities</Typography>
+            {packages.length ? (
+              <FormControl fullWidth sx={{ mt: 2 }}>
+                <InputLabel>Corporate package</InputLabel>
+                <Select label="Corporate package" value={selectedPackageId} onChange={(event) => setSelectedPackageId(Number(event.target.value))}>
+                  {packages.map((pkg) => (
+                    <MenuItem key={pkg.id} value={pkg.id}>
+                      {pkg.packageName} · {new Intl.NumberFormat("en-SG", { style: "currency", currency: "SGD" }).format(pkg.price / 100)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            ) : null}
             <Grid container spacing={1.5} sx={{ mt: 1 }}>
-              {shirtSizes.map((size) => (
+              {availableSizes.map((size) => (
                 <Grid item xs={6} key={size}>
                   <TextField
                     fullWidth

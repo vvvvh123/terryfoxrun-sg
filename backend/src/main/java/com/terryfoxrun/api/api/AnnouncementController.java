@@ -16,8 +16,9 @@ public class AnnouncementController {
     }
 
     @GetMapping
-    public ResponseEntity<Object> list(@PathVariable Long eventId) {
-        return ResponseEntity.ok(announcementService.list(eventId));
+    public ResponseEntity<Object> list(@PathVariable Long eventId,
+                                       @RequestParam(defaultValue = "false") boolean dashboardOnly) {
+        return ResponseEntity.ok(announcementService.listDtos(eventId, dashboardOnly));
     }
 
     @PostMapping
@@ -25,7 +26,6 @@ public class AnnouncementController {
                                          @Valid @RequestBody AnnouncementRequest request,
                                          @RequestHeader(value = "X-User-Id", required = false) String userId) {
         String creator = userId != null ? userId : "admin";
-        return ResponseEntity.ok(announcementService.create(eventId, creator, request));
+        return ResponseEntity.ok(announcementService.createDto(eventId, creator, request));
     }
 }
-

@@ -20,7 +20,7 @@ function AuthCallbackContent() {
           return;
         }
       }
-      router.replace("/dashboard");
+      router.replace(searchParams.get("next") ?? "/dashboard");
     }
 
     finishSignIn();

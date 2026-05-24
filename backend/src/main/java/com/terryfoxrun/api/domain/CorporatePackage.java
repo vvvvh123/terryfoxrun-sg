@@ -22,4 +22,44 @@ public class CorporatePackage {
     public Long getId() {
         return id;
     }
+
+    public Event getEvent() {
+        return event;
+    }
+
+    public void setEvent(Event event) {
+        this.event = event;
+    }
+
+    public String getPackageName() {
+        return packageName;
+    }
+
+    public void setPackageName(String packageName) {
+        this.packageName = packageName;
+    }
+
+    public Integer getPrice() {
+        return price;
+    }
+
+    public void setPrice(Integer price) {
+        this.price = price;
+    }
+
+    public String getShirtAllocationRulesJson() {
+        return shirtAllocationRulesJson;
+    }
+
+    public void setShirtAllocationRulesJson(String shirtAllocationRulesJson) {
+        this.shirtAllocationRulesJson = shirtAllocationRulesJson;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
 }

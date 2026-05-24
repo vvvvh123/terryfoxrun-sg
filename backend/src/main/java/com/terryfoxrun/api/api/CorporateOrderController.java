@@ -22,17 +22,16 @@ public class CorporateOrderController {
 
     @GetMapping
     public ResponseEntity<Object> listOrders(@RequestParam Long eventId) {
-        return ResponseEntity.ok(corporateOrderService.list(eventId));
+        return ResponseEntity.ok(corporateOrderService.listDtos(eventId));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<Object> getOrder(@PathVariable Long id) {
-        return ResponseEntity.ok(corporateOrderService.get(id));
+        return ResponseEntity.ok(corporateOrderService.getDto(id));
     }
 
     @PatchMapping("/{id}")
     public ResponseEntity<Object> updateOrder(@PathVariable Long id, @RequestParam String status) {
-        return ResponseEntity.ok(corporateOrderService.updateStatus(id, status));
+        return ResponseEntity.ok(corporateOrderService.updateStatusDto(id, status));
     }
 }
-

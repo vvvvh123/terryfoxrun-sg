@@ -15,6 +15,10 @@ public class CorporateOrder {
     @JoinColumn(name = "event_id")
     private Event event;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "corporate_package_id")
+    private CorporatePackage corporatePackage;
+
     private String companyName;
     private String companyAddress;
     private String uen;
@@ -37,6 +41,14 @@ public class CorporateOrder {
 
     public void setEvent(Event event) {
         this.event = event;
+    }
+
+    public CorporatePackage getCorporatePackage() {
+        return corporatePackage;
+    }
+
+    public void setCorporatePackage(CorporatePackage corporatePackage) {
+        this.corporatePackage = corporatePackage;
     }
 
     public String getCompanyName() {
@@ -111,4 +123,3 @@ public class CorporateOrder {
         this.items = items;
     }
 }
-

@@ -10,4 +10,6 @@ public interface EmailService {
     void sendPaymentRejectedEmail(Registration registration, String reason);
 
     void sendContactSubmissionEmail(String recipientEmail, String fromEmail, String senderName, String message);
+
+    void sendCampaignPreview(String audience, String subject, String body);
 }

@@ -8,5 +8,6 @@ import java.util.List;
 
 public interface AnnouncementRepository extends JpaRepository<Announcement, Long> {
     List<Announcement> findByEventOrderByCreatedAtDesc(Event event);
-}
 
+    List<Announcement> findByEventAndChannelDashboardTrueOrderByCreatedAtDesc(Event event);
+}

@@ -3,6 +3,8 @@ package com.terryfoxrun.api.service;
 import com.terryfoxrun.api.domain.Category;
 import com.terryfoxrun.api.domain.Donation;
 import com.terryfoxrun.api.domain.Event;
+import com.terryfoxrun.api.domain.InventoryMovement;
+import com.terryfoxrun.api.domain.Payment;
 import com.terryfoxrun.api.domain.Registration;
 import com.terryfoxrun.api.domain.RegistrationParticipant;
 import com.terryfoxrun.api.domain.RegistrationShirt;
@@ -17,11 +19,14 @@ import com.terryfoxrun.api.dto.RegistrationQuoteResponse;
 import com.terryfoxrun.api.repo.CategoryRepository;
 import com.terryfoxrun.api.repo.DonationRepository;
 import com.terryfoxrun.api.repo.EventRepository;
+import com.terryfoxrun.api.repo.InventoryMovementRepository;
 import com.terryfoxrun.api.repo.PaymentAttemptRepository;
+import com.terryfoxrun.api.repo.PaymentRepository;
 import com.terryfoxrun.api.repo.RegistrationParticipantRepository;
 import com.terryfoxrun.api.repo.RegistrationRepository;
 import com.terryfoxrun.api.repo.RegistrationShirtRepository;
 import com.terryfoxrun.api.repo.ShirtInventoryRepository;
+import com.terryfoxrun.api.service.email.EmailService;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -46,6 +51,9 @@ public class RegistrationService {
     private final ShirtInventoryRepository shirtInventoryRepository;
     private final RegistrationShirtRepository registrationShirtRepository;
     private final PaymentAttemptRepository paymentAttemptRepository;
+    private final PaymentRepository paymentRepository;
+    private final InventoryMovementRepository inventoryMovementRepository;
+    private final EmailService emailService;
 
     public RegistrationService(EventRepository eventRepository,
                                CategoryRepository categoryRepository,
@@ -54,7 +62,10 @@ public class RegistrationService {
                                DonationRepository donationRepository,
                                ShirtInventoryRepository shirtInventoryRepository,
                                RegistrationShirtRepository registrationShirtRepository,
-                               PaymentAttemptRepository paymentAttemptRepository) {
+                               PaymentAttemptRepository paymentAttemptRepository,
+                               PaymentRepository paymentRepository,
+                               InventoryMovementRepository inventoryMovementRepository,
+                               EmailService emailService) {
         this.eventRepository = eventRepository;
         this.categoryRepository = categoryRepository;
         this.registrationRepository = registrationRepository;
@@ -63,6 +74,9 @@ public class RegistrationService {
         this.shirtInventoryRepository = shirtInventoryRepository;
         this.registrationShirtRepository = registrationShirtRepository;
         this.paymentAttemptRepository = paymentAttemptRepository;
+        this.paymentRepository = paymentRepository;
+        this.inventoryMovementRepository = inventoryMovementRepository;
+        this.emailService = emailService;
     }
 
     @Transactional(readOnly = true)
@@ -124,14 +138,30 @@ public class RegistrationService {
             entity.setAddress(participant.address());
             entity.setNricLast4(participant.nricLast4());
             entity.setMedicalNotes(participant.medicalNotes());
-            entity.setTshirtSize(participant.tshirtSize());
-            entity.setTshirtType(participant.tshirtType());
-            entity.setTshirtQty(Optional.ofNullable(participant.tshirtQty()).orElse(0));
+            List<RegistrationQuoteRequest.ShirtOrderDto> shirtOrders = participantShirtOrders(participant);
+            RegistrationQuoteRequest.ShirtOrderDto firstShirt = shirtOrders.stream()
+                    .filter(order -> order.quantity() != null && order.quantity() > 0)
+                    .findFirst()
+                    .orElse(null);
+            entity.setTshirtSize(firstShirt == null ? participant.tshirtSize() : firstShirt.size());
+            entity.setTshirtType(firstShirt == null ? participant.tshirtType() : firstShirt.type());
+            entity.setTshirtQty(firstShirt == null ? Optional.ofNullable(participant.tshirtQty()).orElse(0) : firstShirt.quantity());
             entity.setPickupToken(UUID.randomUUID().toString());
             entity.setPickupCode(UUID.randomUUID().toString().substring(0, 8).toUpperCase());
             entity.setPickupStatus("PENDING");
             registration.getParticipants().add(entity);
             participantRepository.save(entity);
+            for (RegistrationQuoteRequest.ShirtOrderDto shirtOrder : shirtOrders) {
+                if (shirtOrder.quantity() == null || shirtOrder.quantity() <= 0) continue;
+                RegistrationShirt shirt = new RegistrationShirt();
+                shirt.setRegistration(registration);
+                shirt.setParticipant(entity);
+                shirt.setType(shirtOrder.type());
+                shirt.setSize(shirtOrder.size());
+                shirt.setQuantity(shirtOrder.quantity());
+                shirt.setSource("participant");
+                registrationShirtRepository.save(shirt);
+            }
         }
 
         if (request.extraShirts() != null) {
@@ -152,6 +182,10 @@ public class RegistrationService {
             donation.setAmount(request.donationAmount());
             registration.getDonations().add(donation);
             donationRepository.save(donation);
+        }
+
+        if (registration.getTotalAmount() != null && registration.getTotalAmount() == 0) {
+            confirmNoPaymentRequired(registration);
         }
 
         return registration;
@@ -203,6 +237,7 @@ public class RegistrationService {
                         participant.getTshirtSize(),
                         participant.getTshirtType(),
                         participant.getTshirtQty(),
+                        participantShirtDtos(participant),
                         participant.getPickupCode(),
                         participant.getPickupStatus()))
                 .toList();
@@ -228,6 +263,7 @@ public class RegistrationService {
                 registration.getId(),
                 registration.getEvent().getId(),
                 registration.getEvent().getName(),
+                registration.getEvent().getYear(),
                 registration.getPayerName(),
                 registration.getPayerEmail(),
                 registration.getPayerIdentityNumber(),
@@ -245,13 +281,19 @@ public class RegistrationService {
 
     Map<String, Integer> requestedShirts(Registration registration) {
         Map<String, Integer> requested = new HashMap<>();
-        for (RegistrationParticipant participant : participantRepository.findByRegistration(registration)) {
-            if (participant.getTshirtSize() != null && participant.getTshirtQty() != null && participant.getTshirtQty() > 0) {
-                requested.merge(participant.getTshirtType() + ":" + participant.getTshirtSize(), participant.getTshirtQty(), Integer::sum);
+        List<RegistrationShirt> shirtRows = registrationShirtRepository.findByRegistration(registration);
+        boolean hasParticipantRows = shirtRows.stream().anyMatch(shirt -> "participant".equals(shirt.getSource()) || shirt.getParticipant() != null);
+        if (!hasParticipantRows) {
+            for (RegistrationParticipant participant : participantRepository.findByRegistration(registration)) {
+                if (participant.getTshirtSize() != null && participant.getTshirtQty() != null && participant.getTshirtQty() > 0) {
+                    requested.merge(participant.getTshirtType() + ":" + participant.getTshirtSize(), participant.getTshirtQty(), Integer::sum);
+                }
             }
         }
-        for (RegistrationShirt extra : registrationShirtRepository.findByRegistration(registration)) {
-            requested.merge(extra.getType() + ":" + extra.getSize(), extra.getQuantity(), Integer::sum);
+        for (RegistrationShirt shirt : shirtRows) {
+            if (shirt.getQuantity() != null && shirt.getQuantity() > 0) {
+                requested.merge(shirt.getType() + ":" + shirt.getSize(), shirt.getQuantity(), Integer::sum);
+            }
         }
         return requested;
     }
@@ -259,8 +301,10 @@ public class RegistrationService {
     private Map<String, Integer> requestedShirts(List<ParticipantInput> participants, List<RegistrationQuoteRequest.ShirtOrderDto> extraShirts) {
         Map<String, Integer> requested = new HashMap<>();
         for (ParticipantInput participant : participants) {
-            if (participant.tshirtSize() != null && participant.tshirtQty() != null && participant.tshirtQty() > 0) {
-                requested.merge(participant.tshirtType() + ":" + participant.tshirtSize(), participant.tshirtQty(), Integer::sum);
+            for (RegistrationQuoteRequest.ShirtOrderDto shirtOrder : participantShirtOrders(participant)) {
+                if (shirtOrder.size() != null && shirtOrder.type() != null && shirtOrder.quantity() != null && shirtOrder.quantity() > 0) {
+                    requested.merge(shirtOrder.type() + ":" + shirtOrder.size(), shirtOrder.quantity(), Integer::sum);
+                }
             }
         }
         if (extraShirts != null) {
@@ -301,5 +345,66 @@ public class RegistrationService {
             }
         }
         throw new IllegalStateException("Could not generate a unique payment reference.");
+    }
+
+    private List<RegistrationQuoteRequest.ShirtOrderDto> participantShirtOrders(ParticipantInput participant) {
+        if (participant.shirtOrders() != null && !participant.shirtOrders().isEmpty()) {
+            return participant.shirtOrders();
+        }
+        if (participant.tshirtSize() != null && participant.tshirtType() != null && participant.tshirtQty() != null && participant.tshirtQty() > 0) {
+            return List.of(new RegistrationQuoteRequest.ShirtOrderDto(participant.tshirtSize(), participant.tshirtType(), participant.tshirtQty()));
+        }
+        return List.of();
+    }
+
+    private List<RegistrationQuoteRequest.ShirtOrderDto> participantShirtDtos(RegistrationParticipant participant) {
+        List<RegistrationShirt> rows = registrationShirtRepository.findByParticipant(participant);
+        if (!rows.isEmpty()) {
+            return rows.stream()
+                    .map(row -> new RegistrationQuoteRequest.ShirtOrderDto(row.getSize(), row.getType(), row.getQuantity()))
+                    .toList();
+        }
+        if (participant.getTshirtSize() != null && participant.getTshirtQty() != null && participant.getTshirtQty() > 0) {
+            return List.of(new RegistrationQuoteRequest.ShirtOrderDto(participant.getTshirtSize(), participant.getTshirtType(), participant.getTshirtQty()));
+        }
+        return List.of();
+    }
+
+    private void confirmNoPaymentRequired(Registration registration) {
+        for (Map.Entry<String, Integer> shirt : requestedShirts(registration).entrySet()) {
+            String[] parts = shirt.getKey().split(":");
+            String type = parts[0];
+            String size = parts[1];
+            int quantity = shirt.getValue();
+            ShirtInventory inventory = shirtInventoryRepository.findByEventIdAndTypeAndSize(
+                    registration.getEvent().getId(),
+                    type,
+                    size).orElseThrow();
+            inventory.setQuantityAvailable(inventory.getQuantityAvailable() - quantity);
+            inventory.setQuantitySold(inventory.getQuantitySold() + quantity);
+            shirtInventoryRepository.save(inventory);
+            inventoryMovementRepository.save(InventoryMovement.create(
+                    registration.getEvent(),
+                    registration,
+                    type,
+                    size,
+                    -quantity,
+                    "REGISTRATION_NO_PAYMENT_REQUIRED"));
+        }
+
+        registration.setStatus("CONFIRMED");
+        registration.setPaymentStatus("CONFIRMED");
+        registrationRepository.save(registration);
+
+        Payment payment = new Payment();
+        payment.setRegistration(registration);
+        payment.setAmount(0);
+        payment.setCurrency("SGD");
+        payment.setStatus("CONFIRMED");
+        payment.setProvider("NO_PAYMENT_REQUIRED");
+        payment.setProviderId(registration.getGeneratedPaymentReference());
+        payment.setCreatedAt(LocalDateTime.now());
+        paymentRepository.save(payment);
+        emailService.sendPaymentConfirmedEmail(registration);
     }
 }

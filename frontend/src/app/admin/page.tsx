@@ -24,30 +24,59 @@ import {
 import Grid from "@mui/material/GridLegacy";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip as RechartsTooltip, XAxis, YAxis } from "recharts";
 import {
+  AdminRegistrationReport,
+  Announcement,
   CategoryDto,
+  CorporateOrder,
+  CorporatePackage,
   DailyInventorySold,
+  EmailCampaign,
+  EmailAudienceSegment,
+  EventStats,
   EventDto,
   FormFieldConfig,
   PaymentAttempt,
+  PickupResult,
+  PickupSummary,
+  RoleUsersResponse,
   ShirtInventoryItem,
   SlideshowImage,
   confirmPayment,
   copyEvent,
+  createAnnouncement,
+  createCategory,
+  createCorporatePackage,
+  createEmailCampaign,
   createEvent,
+  deleteCategory,
   deleteEvent,
+  deleteCorporatePackage,
   exportCsvUrl,
+  getAdminRegistrations,
+  getAnnouncements,
   getCategories,
+  getCorporateOrders,
+  getCorporatePackages,
   getCurrentEvent,
   getDailySold,
+  getEmailCampaigns,
+  getEmailAudiences,
   getEvents,
+  getEventStats,
   getFormFields,
   getInventory,
   getPaymentAttempts,
+  getPickupSummary,
+  getPickupHistory,
+  getRoleUsers,
   getSlideshow,
   rejectPayment,
   saveFormFields,
   saveSlideshow,
   setCurrentEvent,
+  updateCategory,
+  updateCorporateOrderStatus,
+  updateCorporatePackage,
   updateEvent,
   updateInventory,
 } from "@/lib/api";
@@ -69,6 +98,22 @@ function fromDateTimeInput(value: string) {
   return value ? new Date(value).toISOString() : undefined;
 }
 
+const packageSizes = ["XS", "S", "M", "L", "XL", "XXL"];
+
+function parsePackageQuantities(json?: string) {
+  try {
+    const parsed = JSON.parse(json || "{}") as Record<string, Record<string, number>>;
+    return parsed.adult ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function toPackageRulesJson(quantities: Record<string, number>) {
+  const active = Object.fromEntries(Object.entries(quantities).filter(([, quantity]) => Number(quantity || 0) > 0));
+  return JSON.stringify({ adult: active });
+}
+
 export default function AdminPage() {
   const { appRole, loading, user } = useAuth();
   const [tab, setTab] = useState(0);
@@ -83,30 +128,63 @@ export default function AdminPage() {
   const [soldSize, setSoldSize] = useState("ALL");
   const [slides, setSlides] = useState<SlideshowImage[]>([]);
   const [formFields, setFormFields] = useState<FormFieldConfig[]>(defaultFormFields);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [campaigns, setCampaigns] = useState<EmailCampaign[]>([]);
+  const [emailAudiences, setEmailAudiences] = useState<EmailAudienceSegment[]>([]);
+  const [corporatePackages, setCorporatePackages] = useState<CorporatePackage[]>([]);
+  const [corporateOrders, setCorporateOrders] = useState<CorporateOrder[]>([]);
+  const [pickupSummary, setPickupSummary] = useState<PickupSummary | null>(null);
+  const [pickupHistory, setPickupHistory] = useState<PickupResult[]>([]);
+  const [roleUsers, setRoleUsers] = useState<RoleUsersResponse | null>(null);
+  const [eventStats, setEventStats] = useState<EventStats | null>(null);
+  const [registrationReport, setRegistrationReport] = useState<AdminRegistrationReport | null>(null);
+  const [registrationSearch, setRegistrationSearch] = useState("");
+  const [registrationPaymentFilter, setRegistrationPaymentFilter] = useState("");
+  const [pickupSearch, setPickupSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("PENDING_ADMIN_VERIFICATION");
   const [methodFilter, setMethodFilter] = useState<"PAYNOW" | "BANK_TRANSFER" | "">("");
   const [adminTransactionIds, setAdminTransactionIds] = useState<Record<number, string>>({});
   const [rejectionReasons, setRejectionReasons] = useState<Record<number, string>>({});
+  const [announcementDraft, setAnnouncementDraft] = useState({ title: "", body: "", channelDashboard: true, channelEmail: false });
+  const [campaignDraft, setCampaignDraft] = useState({ audience: "confirmed-participants", subject: "", body: "", sendPreview: true });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const loadEventData = useCallback(async (targetEvent: EventDto) => {
     setEvent(targetEvent);
     setEventDraft(targetEvent);
-    const [loadedPayments, inventoryItems, configuredSlides, loadedFields, loadedCategories] = await Promise.all([
+    const [loadedPayments, inventoryItems, configuredSlides, loadedFields, loadedCategories, loadedAnnouncements, loadedCampaigns, loadedAudiences, loadedPackages, loadedCorporateOrders, loadedPickupSummary, loadedPickupHistory, loadedStats, loadedRegistrationReport] = await Promise.all([
       getPaymentAttempts({ status: statusFilter, method: methodFilter, eventId: targetEvent.id }),
       getInventory(targetEvent.id),
       getSlideshow(targetEvent.id),
       getFormFields(targetEvent.id),
       getCategories(targetEvent.id),
+      getAnnouncements(targetEvent.id),
+      getEmailCampaigns(targetEvent.id),
+      getEmailAudiences(targetEvent.id),
+      getCorporatePackages(targetEvent.id),
+      getCorporateOrders(targetEvent.id),
+      getPickupSummary(targetEvent.id),
+      getPickupHistory({ eventId: targetEvent.id, query: pickupSearch }),
+      getEventStats(targetEvent.id),
+      getAdminRegistrations(targetEvent.id, { query: registrationSearch, paymentStatus: registrationPaymentFilter }),
     ]);
     setPayments(loadedPayments);
     setInventory(inventoryItems);
     setSlides(configuredSlides.length ? configuredSlides : [{ imageUrl: "", blurb: "", displayOrder: 1, active: true }]);
     setFormFields(loadedFields.length ? loadedFields : defaultFormFields);
     setCategories(loadedCategories);
+    setAnnouncements(loadedAnnouncements);
+    setCampaigns(loadedCampaigns);
+    setEmailAudiences(loadedAudiences);
+    setCorporatePackages(loadedPackages);
+    setCorporateOrders(loadedCorporateOrders);
+    setPickupSummary(loadedPickupSummary);
+    setPickupHistory(loadedPickupHistory);
+    setEventStats(loadedStats);
+    setRegistrationReport(loadedRegistrationReport);
     setSoldDaily(await getDailySold(targetEvent.id, soldSize));
-  }, [methodFilter, soldSize, statusFilter]);
+  }, [methodFilter, pickupSearch, registrationPaymentFilter, registrationSearch, soldSize, statusFilter]);
 
   const loadAdmin = useCallback(async (preferredEventId?: number | null) => {
     const loadedEvents = await getEvents();
@@ -121,6 +199,15 @@ export default function AdminPage() {
       setSlides([]);
       setFormFields(defaultFormFields);
       setCategories([]);
+      setAnnouncements([]);
+      setCampaigns([]);
+      setEmailAudiences([]);
+      setCorporatePackages([]);
+      setCorporateOrders([]);
+      setPickupSummary(null);
+      setPickupHistory([]);
+      setEventStats(null);
+      setRegistrationReport(null);
       return;
     }
     const target = loadedEvents.find((candidate) => candidate.id === preferredEventId)
@@ -140,16 +227,29 @@ export default function AdminPage() {
     loadAdmin(selectedEventId).catch(() => setError("Start the backend to use admin tools."));
   }, [appRole, loadAdmin, loading, selectedEventId, user]);
 
+  useEffect(() => {
+    if (loading || !user || appRole !== "admin") return;
+    getRoleUsers().then(setRoleUsers).catch(() => setRoleUsers({
+      users: [],
+      counts: { admin: 0, volunteer: 0, participant: 0 },
+      configured: false,
+      message: "Could not load Supabase roles. Check backend role listing configuration.",
+    }));
+  }, [appRole, loading, user]);
+
   const metrics = useMemo(() => {
     const remaining = inventory.reduce((sum, item) => sum + Number(item.quantityAvailable || 0), 0);
     const confirmed = payments.filter((payment) => payment.verificationStatus === "CONFIRMED").length;
     return [
       { label: "Pending payments", value: payments.filter((payment) => payment.verificationStatus === "PENDING_ADMIN_VERIFICATION").length, help: "Payment attempts waiting for manual admin verification." },
       { label: "Confirmed in view", value: confirmed, help: "Confirmed payments matching the current payment filters." },
+      { label: "Amount confirmed", value: formatMoney(eventStats?.confirmedAmount ?? 0), help: "Confirmed funds for the selected event." },
+      { label: "Amount pending", value: formatMoney(eventStats?.pendingAmount ?? 0), help: "Funds waiting for manual payment verification." },
       { label: "Stock remaining", value: remaining, help: "Total available T-shirt stock for the selected event." },
+      { label: "Collected pickups", value: pickupSummary?.collectedCount ?? 0, help: "Participants whose T-shirt pickup has been marked collected." },
       { label: "Active slides", value: slides.filter((slide) => slide.active).length, help: "Slideshow images currently enabled for the selected event homepage." },
     ];
-  }, [inventory, payments, slides]);
+  }, [eventStats, inventory, payments, pickupSummary, slides]);
 
   function patchEvent(patch: Partial<EventDto>) {
     setEventDraft((current) => (current ? { ...current, ...patch } : current));
@@ -207,6 +307,25 @@ export default function AdminPage() {
 
   function removeField(index: number) {
     setFormFields((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  }
+
+  function updateCategoryDraft(index: number, patch: Partial<CategoryDto>) {
+    setCategories((current) => current.map((category, currentIndex) => (currentIndex === index ? { ...category, ...patch } : category)));
+  }
+
+  function updateCorporatePackageDraft(index: number, patch: Partial<CorporatePackage>) {
+    setCorporatePackages((current) => current.map((pkg, currentIndex) => (currentIndex === index ? { ...pkg, ...patch } : pkg)));
+  }
+
+  function updateCorporatePackageQuantity(index: number, size: string, quantity: number) {
+    setCorporatePackages((current) =>
+      current.map((pkg, currentIndex) => {
+        if (currentIndex !== index) return pkg;
+        const quantities = parsePackageQuantities(pkg.shirtAllocationRulesJson);
+        quantities[size] = Math.max(0, quantity);
+        return { ...pkg, shirtAllocationRulesJson: toPackageRulesJson(quantities) };
+      }),
+    );
   }
 
   async function handleCreateEvent() {
@@ -319,6 +438,116 @@ export default function AdminPage() {
       await loadAdmin();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save registration fields.");
+    }
+  }
+
+  async function handleSaveCategories() {
+    if (!event) return;
+    setError("");
+    try {
+      for (const category of categories) {
+        if (!category.name.trim()) continue;
+        if (category.id) {
+          await updateCategory(event.id, category.id, category);
+        } else {
+          await createCategory(event.id, category);
+        }
+      }
+      setMessage("Categories saved.");
+      await loadAdmin(event.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save categories.");
+    }
+  }
+
+  async function handleDeleteCategory(category: CategoryDto) {
+    if (!event) return;
+    if (!category.id) {
+      setCategories((current) => current.filter((candidate) => candidate !== category));
+      return;
+    }
+    if (!window.confirm(`Delete category ${category.name}?`)) return;
+    setError("");
+    try {
+      await deleteCategory(event.id, category.id);
+      setMessage("Category deleted.");
+      await loadAdmin(event.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete category.");
+    }
+  }
+
+  async function handleCreateAnnouncement() {
+    if (!event) return;
+    setError("");
+    try {
+      await createAnnouncement(event.id, announcementDraft);
+      setAnnouncementDraft({ title: "", body: "", channelDashboard: true, channelEmail: false });
+      setMessage("Announcement created.");
+      await loadAdmin(event.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create announcement.");
+    }
+  }
+
+  async function handleCreateCampaign() {
+    if (!event) return;
+    setError("");
+    try {
+      await createEmailCampaign(event.id, campaignDraft);
+      setCampaignDraft({ audience: "confirmed-participants", subject: "", body: "", sendPreview: true });
+      setMessage("Email campaign preview created.");
+      await loadAdmin(event.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not create email campaign.");
+    }
+  }
+
+  async function handleSaveCorporatePackages() {
+    if (!event) return;
+    setError("");
+    try {
+      for (const pkg of corporatePackages) {
+        if (!pkg.packageName.trim()) continue;
+        if (pkg.id) {
+          await updateCorporatePackage(event.id, pkg.id, pkg);
+        } else {
+          await createCorporatePackage(event.id, pkg);
+        }
+      }
+      setMessage("Corporate packages saved.");
+      await loadAdmin(event.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save corporate packages.");
+    }
+  }
+
+  async function handleDeleteCorporatePackage(pkg: CorporatePackage) {
+    if (!event) return;
+    if (!pkg.id) {
+      setCorporatePackages((current) => current.filter((candidate) => candidate !== pkg));
+      return;
+    }
+    if (!window.confirm(`Delete corporate package ${pkg.packageName}?`)) return;
+    setError("");
+    try {
+      await deleteCorporatePackage(event.id, pkg.id);
+      setMessage("Corporate package deleted.");
+      await loadAdmin(event.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete corporate package.");
+    }
+  }
+
+  async function handleCorporateOrderStatus(orderId: number, status: string) {
+    if (!event) return;
+    setError("");
+    try {
+      await updateCorporateOrderStatus(orderId, status);
+      setMessage("Corporate order status updated.");
+      await loadAdmin(event.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update corporate order.");
     }
   }
 
@@ -464,15 +693,135 @@ export default function AdminPage() {
 
       <Paper sx={{ p: { xs: 2, md: 3 } }}>
         <Tabs value={tab} onChange={(_, value) => setTab(value)} variant="scrollable" allowScrollButtonsMobile sx={{ borderBottom: "1px solid #e2e6ef", mb: 3 }}>
+          <Tab label="Event Stats" />
+          <Tab label="Registrations" />
           <Tab label="Payments" />
+          <Tab label="Announcements" />
+          <Tab label="Corporate" />
           <Tab label="Event Setup" />
           <Tab label="Registration Fields" />
           <Tab label="Inventory" />
+          <Tab label="Pickup" />
           <Tab label="Homepage Slideshow" />
+          <Tab label="Roles" />
           <Tab label="Exports" />
         </Tabs>
 
         {tab === 0 ? (
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={4}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography color="text.secondary">Confirmed amount raised</Typography>
+                <Typography variant="h3">{formatMoney(eventStats?.confirmedAmount ?? 0)}</Typography>
+                <Typography variant="body2" color="text.secondary">{eventStats?.confirmedPaymentCount ?? 0} confirmed registrations</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography color="text.secondary">Pending verification</Typography>
+                <Typography variant="h3">{formatMoney(eventStats?.pendingAmount ?? 0)}</Typography>
+                <Typography variant="body2" color="text.secondary">{eventStats?.pendingPaymentCount ?? 0} waiting for admin confirmation</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12} md={4}>
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Typography color="text.secondary">Combined view</Typography>
+                <Typography variant="h3">{formatMoney((eventStats?.confirmedAmount ?? 0) + (eventStats?.pendingAmount ?? 0))}</Typography>
+                <Typography variant="body2" color="text.secondary">Shown as confirmed plus pending, not an official merged total.</Typography>
+              </Paper>
+            </Grid>
+            <Grid item xs={12}>
+              <Box sx={{ height: 360 }}>
+                <Typography variant="h5" sx={{ mb: 1 }}>Amount raised over time</Typography>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={eventStats?.dailyAmounts ?? []}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" />
+                    <YAxis tickFormatter={(value) => `$${Number(value) / 100}`} />
+                    <RechartsTooltip formatter={(value) => formatMoney(Number(value))} />
+                    <Bar dataKey="cumulativeConfirmedAmount" name="Confirmed cumulative" fill="#2e7d32" />
+                    <Bar dataKey="cumulativePendingAmount" name="Pending cumulative" fill="#f57c00" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </Box>
+            </Grid>
+          </Grid>
+        ) : null}
+
+        {tab === 1 ? (
+          <Stack spacing={2}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between">
+              <Box>
+                <Typography variant="h5">Registrations</Typography>
+                <Typography color="text.secondary">Search registrations and monitor signup momentum for the selected event.</Typography>
+              </Box>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <TextField label="Search registrations" value={registrationSearch} onChange={(e) => setRegistrationSearch(e.target.value)} sx={{ minWidth: { sm: 300 } }} />
+                <FormControl sx={{ minWidth: 220 }}>
+                  <InputLabel>Payment status</InputLabel>
+                  <Select label="Payment status" value={registrationPaymentFilter} onChange={(e) => setRegistrationPaymentFilter(e.target.value)}>
+                    <MenuItem value="">All statuses</MenuItem>
+                    <MenuItem value="CONFIRMED">Confirmed</MenuItem>
+                    <MenuItem value="PENDING_ADMIN_VERIFICATION">Pending verification</MenuItem>
+                    <MenuItem value="PAYMENT_REJECTED">Rejected</MenuItem>
+                    <MenuItem value="UNPAID">Unpaid</MenuItem>
+                  </Select>
+                </FormControl>
+              </Stack>
+            </Stack>
+            <Grid container spacing={2}>
+              {[
+                ["Total registrations", registrationReport?.counts.total ?? 0],
+                ["Confirmed", registrationReport?.counts.confirmed ?? 0],
+                ["Pending payment", registrationReport?.counts.pendingPayment ?? 0],
+                ["Needs attention", registrationReport?.counts.rejected ?? 0],
+              ].map(([label, value]) => (
+                <Grid item xs={12} sm={6} md={3} key={label}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography color="text.secondary">{label}</Typography>
+                    <Typography variant="h3">{value}</Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+            <Box sx={{ height: 280 }}>
+              <Typography fontWeight={800} sx={{ mb: 1 }}>Registrations over time</Typography>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={registrationReport?.dailyRegistrations ?? []}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis allowDecimals={false} />
+                  <RechartsTooltip />
+                  <Bar dataKey="count" fill="#10233d" />
+                </BarChart>
+              </ResponsiveContainer>
+            </Box>
+            <Stack spacing={1.5}>
+              {registrationReport?.registrations.map((registration) => (
+                <Box key={registration.id} sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="space-between">
+                    <Box>
+                      <Typography fontWeight={800}>{registration.payerName}</Typography>
+                      <Typography color="text.secondary">
+                        {registration.payerEmail} · {registration.generatedPaymentReference} · {registration.participantCount} participant{registration.participantCount === 1 ? "" : "s"}
+                      </Typography>
+                    </Box>
+                    <Stack direction="row" spacing={1}>
+                      <Chip size="small" label={registration.status?.replaceAll("_", " ") ?? "status unknown"} />
+                      <Chip size="small" color={registration.paymentStatus === "CONFIRMED" ? "success" : registration.paymentStatus === "PAYMENT_REJECTED" ? "error" : "warning"} label={registration.paymentStatus?.replaceAll("_", " ") ?? "payment unknown"} />
+                    </Stack>
+                  </Stack>
+                  <Typography color="text.secondary" sx={{ mt: 1 }}>
+                    {formatMoney(registration.totalAmount)} · {registration.shirtSummary} · {registration.createdAt ? new Date(registration.createdAt).toLocaleString("en-SG") : "No date"}
+                  </Typography>
+                </Box>
+              ))}
+              {!registrationReport?.registrations.length ? <Typography color="text.secondary">No registrations match the current search.</Typography> : null}
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {tab === 2 ? (
           <Stack spacing={2}>
             <Typography variant="h5">Payment verification queue</Typography>
             <Grid container spacing={2}>
@@ -558,7 +907,182 @@ export default function AdminPage() {
           </Stack>
         ) : null}
 
-        {tab === 1 && eventDraft ? (
+        {tab === 3 ? (
+          <Grid container spacing={3}>
+            <Grid item xs={12} lg={6}>
+              <Stack spacing={2}>
+                <Typography variant="h5">Create announcement</Typography>
+                <TextField fullWidth label="Title" value={announcementDraft.title} onChange={(e) => setAnnouncementDraft({ ...announcementDraft, title: e.target.value })} />
+                <TextField fullWidth multiline minRows={4} label="Body" value={announcementDraft.body} onChange={(e) => setAnnouncementDraft({ ...announcementDraft, body: e.target.value })} />
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                  <FormControlLabel control={<Switch checked={announcementDraft.channelDashboard} onChange={(e) => setAnnouncementDraft({ ...announcementDraft, channelDashboard: e.target.checked })} />} label="Show in dashboard" />
+                  <FormControlLabel control={<Switch checked={announcementDraft.channelEmail} onChange={(e) => setAnnouncementDraft({ ...announcementDraft, channelEmail: e.target.checked })} />} label="Mark for email" />
+                </Stack>
+                <Button variant="contained" sx={{ alignSelf: "flex-start" }} onClick={handleCreateAnnouncement}>
+                  Create announcement
+                </Button>
+              </Stack>
+            </Grid>
+            <Grid item xs={12} lg={6}>
+              <Stack spacing={2}>
+                <Typography variant="h5">Mass email preview</Typography>
+                <Typography color="text.secondary">Choose a fixed audience segment for the selected event.</Typography>
+                <Stack spacing={1} sx={{ maxHeight: 260, overflowY: "auto", pr: 0.5 }}>
+                  {emailAudiences.map((audience) => (
+                    <Box
+                      key={audience.key}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setCampaignDraft({ ...campaignDraft, audience: audience.key })}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") setCampaignDraft({ ...campaignDraft, audience: audience.key });
+                      }}
+                      sx={{
+                        p: 1.5,
+                        border: "1px solid",
+                        borderColor: campaignDraft.audience === audience.key ? "#c91f2e" : "#e2e6ef",
+                        borderRadius: 2,
+                        cursor: "pointer",
+                        bgcolor: campaignDraft.audience === audience.key ? "#fff5f5" : "white",
+                      }}
+                    >
+                      <Stack direction="row" spacing={1} justifyContent="space-between">
+                        <Typography fontWeight={800}>{audience.label}</Typography>
+                        <Chip size="small" label={audience.count} />
+                      </Stack>
+                      <Typography variant="body2" color="text.secondary">{audience.description}</Typography>
+                    </Box>
+                  ))}
+                </Stack>
+                <TextField fullWidth label="Subject" value={campaignDraft.subject} onChange={(e) => setCampaignDraft({ ...campaignDraft, subject: e.target.value })} />
+                <TextField fullWidth multiline minRows={4} label="Email body" value={campaignDraft.body} onChange={(e) => setCampaignDraft({ ...campaignDraft, body: e.target.value })} />
+                <FormControlLabel control={<Switch checked={campaignDraft.sendPreview} onChange={(e) => setCampaignDraft({ ...campaignDraft, sendPreview: e.target.checked })} />} label="Create local email preview" />
+                <Button variant="contained" sx={{ alignSelf: "flex-start" }} onClick={handleCreateCampaign}>
+                  Save campaign
+                </Button>
+              </Stack>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6">Previous announcements</Typography>
+              <Stack spacing={1.5} sx={{ mt: 1 }}>
+                {announcements.map((announcement) => (
+                  <Box key={announcement.id} sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
+                    <Typography fontWeight={800}>{announcement.title}</Typography>
+                    <Typography color="text.secondary" sx={{ whiteSpace: "pre-line" }}>{announcement.body}</Typography>
+                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                      {announcement.channelDashboard ? <Chip size="small" label="Dashboard" /> : null}
+                      {announcement.channelEmail ? <Chip size="small" label="Email" /> : null}
+                    </Stack>
+                  </Box>
+                ))}
+                {!announcements.length ? <Typography color="text.secondary">No announcements yet.</Typography> : null}
+              </Stack>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Typography variant="h6">Email campaigns</Typography>
+              <Stack spacing={1.5} sx={{ mt: 1 }}>
+                {campaigns.map((campaign) => (
+                  <Box key={campaign.id} sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
+                    <Typography fontWeight={800}>{campaign.subject}</Typography>
+                    <Typography color="text.secondary">{campaign.audience} · {campaign.sentStatus}</Typography>
+                  </Box>
+                ))}
+                {!campaigns.length ? <Typography color="text.secondary">No campaigns yet.</Typography> : null}
+              </Stack>
+            </Grid>
+          </Grid>
+        ) : null}
+
+        {tab === 4 ? (
+          <Stack spacing={3}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between">
+              <Box>
+                <Typography variant="h5">Corporate packages</Typography>
+                <Typography color="text.secondary">Configure packages and review submitted corporate shirt orders.</Typography>
+              </Box>
+              <Button variant="outlined" onClick={() => setCorporatePackages([...corporatePackages, { packageName: "", price: 0, shirtAllocationRulesJson: toPackageRulesJson({}), active: true }])}>
+                Add package
+              </Button>
+            </Stack>
+            <Grid container spacing={2}>
+              {corporatePackages.map((pkg, index) => (
+                <Grid item xs={12} md={6} key={pkg.id ?? index}>
+                  <Box sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={12} md={7}>
+                        <TextField fullWidth label="Package name" value={pkg.packageName} onChange={(e) => updateCorporatePackageDraft(index, { packageName: e.target.value })} />
+                      </Grid>
+                      <Grid item xs={12} md={5}>
+                        <TextField fullWidth type="number" label="Price (SGD)" value={(pkg.price ?? 0) / 100} onChange={(e) => updateCorporatePackageDraft(index, { price: Math.round(Number(e.target.value || 0) * 100) })} />
+                      </Grid>
+                      <Grid item xs={12}>
+                        <Typography fontWeight={800} sx={{ mb: 1 }}>T-shirt allocation</Typography>
+                        <Grid container spacing={1}>
+                          {packageSizes.map((size) => {
+                            const quantities = parsePackageQuantities(pkg.shirtAllocationRulesJson);
+                            return (
+                              <Grid item xs={6} sm={4} md={2} key={size}>
+                                <TextField
+                                  fullWidth
+                                  type="number"
+                                  label={size}
+                                  value={quantities[size] ?? 0}
+                                  inputProps={{ min: 0, "aria-label": `${pkg.packageName || "Corporate package"} ${size} quantity` }}
+                                  onChange={(e) => updateCorporatePackageQuantity(index, size, Number(e.target.value))}
+                                />
+                              </Grid>
+                            );
+                          })}
+                        </Grid>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <FormControlLabel control={<Switch checked={pkg.active} onChange={(e) => updateCorporatePackageDraft(index, { active: e.target.checked })} />} label="Active" />
+                        <Button color="error" variant="outlined" size="small" sx={{ ml: 1 }} onClick={() => handleDeleteCorporatePackage(pkg)}>
+                          Remove
+                        </Button>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+            <Button variant="contained" sx={{ alignSelf: "flex-start" }} onClick={handleSaveCorporatePackages}>
+              Save corporate packages
+            </Button>
+            <Divider />
+            <Typography variant="h5">Corporate orders</Typography>
+            <Stack spacing={1.5}>
+              {corporateOrders.map((order) => (
+                <Box key={order.id} sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={1} justifyContent="space-between">
+                    <Box>
+                      <Typography fontWeight={800}>{order.companyName}</Typography>
+                      <Typography color="text.secondary">{order.uen} · {order.contactName} · {order.contactEmail}</Typography>
+                      <Typography color="text.secondary">{order.items.map((item) => `${item.quantity} x ${item.type} ${item.size}`).join(", ")}</Typography>
+                    </Box>
+                    <FormControl size="small" sx={{ minWidth: 180 }}>
+                      <InputLabel>Status</InputLabel>
+                      <Select label="Status" value={order.status} onChange={(e) => handleCorporateOrderStatus(order.id, e.target.value)}>
+                        <MenuItem value="pending">Pending</MenuItem>
+                        <MenuItem value="payment_confirmed">Payment confirmed</MenuItem>
+                        <MenuItem value="fulfilled">Fulfilled</MenuItem>
+                        <MenuItem value="cancelled">Cancelled</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Stack>
+                </Box>
+              ))}
+              {!corporateOrders.length ? <Typography color="text.secondary">No corporate orders yet.</Typography> : null}
+            </Stack>
+            {event ? (
+              <Button component="a" href={exportCsvUrl(event.id, "corporate-orders")} target="_blank" rel="noreferrer" variant="outlined" sx={{ alignSelf: "flex-start" }}>
+                Export corporate CSV
+              </Button>
+            ) : null}
+          </Stack>
+        ) : null}
+
+        {tab === 5 && eventDraft ? (
           <Stack spacing={3}>
             <Typography variant="h5">Current event setup</Typography>
             <Grid container spacing={2}>
@@ -640,6 +1164,15 @@ export default function AdminPage() {
               </Grid>
               <Grid item xs={12}>
                 <TextField fullWidth multiline minRows={2} label="Donation / tax note" value={eventDraft.eventDetails?.donationNote ?? ""} onChange={(e) => patchEventDetails({ donationNote: e.target.value })} />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth multiline minRows={4} label="Indemnity wording" value={eventDraft.eventDetails?.indemnityText ?? ""} onChange={(e) => patchEventDetails({ indemnityText: e.target.value })} />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth multiline minRows={4} label="PDPA consent wording" value={eventDraft.eventDetails?.pdpaConsentText ?? ""} onChange={(e) => patchEventDetails({ pdpaConsentText: e.target.value })} />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField fullWidth multiline minRows={3} label="Refund / cancellation wording" value={eventDraft.eventDetails?.refundCancellationText ?? ""} onChange={(e) => patchEventDetails({ refundCancellationText: e.target.value })} />
               </Grid>
             </Grid>
             <Divider />
@@ -726,20 +1259,52 @@ export default function AdminPage() {
           </Stack>
         ) : null}
 
-        {tab === 2 ? (
+        {tab === 6 ? (
           <Stack spacing={3}>
             <Box>
               <Typography variant="h5">Registration fields and categories</Typography>
               <Typography color="text.secondary" sx={{ mt: 1 }}>
-                Field visibility is saved now. Category editing is displayed here and will get full add/edit controls once the backend category update API is added.
+                Manage event categories and registration field visibility for the selected event.
               </Typography>
             </Box>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: "wrap", rowGap: 1 }}>
-              {categories.map((category) => (
-                <Chip key={category.id} label={`${category.name}${category.isActive ? "" : " (inactive)"}`} />
-              ))}
-              {!categories.length ? <Chip label="No categories loaded" color="warning" /> : null}
+            <Stack spacing={1.5}>
+              <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between" alignItems={{ md: "center" }}>
+                <Typography variant="h6">Categories</Typography>
+                <Button variant="outlined" onClick={() => setCategories([...categories, { id: 0, eventId: event?.id ?? 0, name: "", description: "", basePrice: 0, isActive: true }])}>
+                  Add category
+                </Button>
+              </Stack>
+              <Grid container spacing={2}>
+                {categories.map((category, index) => (
+                  <Grid item xs={12} md={6} key={`${category.id}-${index}`}>
+                    <Box sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
+                      <Grid container spacing={1.5}>
+                        <Grid item xs={12} md={6}>
+                          <TextField fullWidth label="Category name" value={category.name} onChange={(e) => updateCategoryDraft(index, { name: e.target.value })} />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <TextField fullWidth type="number" label="Base price (SGD)" value={(category.basePrice ?? 0) / 100} onChange={(e) => updateCategoryDraft(index, { basePrice: Math.round(Number(e.target.value || 0) * 100) })} />
+                        </Grid>
+                        <Grid item xs={12}>
+                          <TextField fullWidth label="Description" value={category.description ?? ""} onChange={(e) => updateCategoryDraft(index, { description: e.target.value })} />
+                        </Grid>
+                        <Grid item xs={12}>
+                          <FormControlLabel control={<Switch checked={category.isActive} onChange={(e) => updateCategoryDraft(index, { isActive: e.target.checked })} />} label="Active" />
+                          <Button color="error" variant="outlined" size="small" sx={{ ml: 1 }} onClick={() => handleDeleteCategory(category)}>
+                            Remove category
+                          </Button>
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+              <Button variant="contained" sx={{ alignSelf: "flex-start" }} onClick={handleSaveCategories}>
+                Save categories
+              </Button>
             </Stack>
+            <Divider />
+            <Typography variant="h6">Registration fields</Typography>
             <Grid container spacing={2}>
               {formFields.map((field, index) => (
                 <Grid item xs={12} md={6} key={`${field.fieldKey}-${index}`}>
@@ -792,7 +1357,7 @@ export default function AdminPage() {
           </Stack>
         ) : null}
 
-        {tab === 3 ? (
+        {tab === 7 ? (
           <Grid container spacing={3}>
             <Grid item xs={12} lg={7}>
               <Stack spacing={2}>
@@ -861,7 +1426,50 @@ export default function AdminPage() {
           </Grid>
         ) : null}
 
-        {tab === 4 ? (
+        {tab === 8 ? (
+          <Stack spacing={2}>
+            <Typography variant="h5">Pickup visibility</Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography color="text.secondary">Collected</Typography>
+                  <Typography variant="h3">{pickupSummary?.collectedCount ?? 0}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper variant="outlined" sx={{ p: 2 }}>
+                  <Typography color="text.secondary">Pending pickup</Typography>
+                  <Typography variant="h3">{pickupSummary?.pendingCount ?? 0}</Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between" alignItems={{ md: "center" }}>
+              <Typography variant="h6">Pickup history</Typography>
+              <TextField
+                label="Search pickup code or participant"
+                value={pickupSearch}
+                onChange={(e) => setPickupSearch(e.target.value)}
+                sx={{ minWidth: { md: 360 } }}
+              />
+            </Stack>
+            <Stack spacing={1.5}>
+              {pickupHistory.map((item) => (
+                <Box key={item.participantId} sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="space-between">
+                    <Typography fontWeight={800}>{item.participantName}</Typography>
+                    <Chip size="small" label={item.result.replaceAll("_", " ")} />
+                  </Stack>
+                  <Typography color="text.secondary">
+                    {item.pickupCode} · {(item.shirtOrders ?? []).length ? item.shirtOrders?.map((shirt) => `${shirt.quantity} x ${shirt.size}`).join(", ") : "No shirt"} · {item.pickupTimestamp ? new Date(item.pickupTimestamp).toLocaleString("en-SG") : "Not collected yet"}
+                  </Typography>
+                </Box>
+              ))}
+              {!pickupHistory.length ? <Typography color="text.secondary">No pickup records match the current search.</Typography> : null}
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {tab === 9 ? (
           <Stack spacing={2}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between">
               <Box>
@@ -904,7 +1512,51 @@ export default function AdminPage() {
           </Stack>
         ) : null}
 
-        {tab === 5 && event ? (
+        {tab === 10 ? (
+          <Stack spacing={2}>
+            <Box>
+              <Typography variant="h5">Roles</Typography>
+              <Typography color="text.secondary">View Supabase Auth user roles. Role changes are still made manually in Supabase for v1.</Typography>
+            </Box>
+            {!roleUsers?.configured ? (
+              <Alert severity="info">
+                {roleUsers?.message ?? "Configure backend Supabase secret settings to list users."}
+              </Alert>
+            ) : null}
+            <Grid container spacing={2}>
+              {[
+                ["Admins", roleUsers?.counts.admin ?? 0],
+                ["Volunteers", roleUsers?.counts.volunteer ?? 0],
+                ["Participants / none", roleUsers?.counts.participant ?? 0],
+              ].map(([label, value]) => (
+                <Grid item xs={12} md={4} key={label}>
+                  <Paper variant="outlined" sx={{ p: 2 }}>
+                    <Typography color="text.secondary">{label}</Typography>
+                    <Typography variant="h3">{value}</Typography>
+                  </Paper>
+                </Grid>
+              ))}
+            </Grid>
+            <Stack spacing={1.5}>
+              {roleUsers?.users.map((roleUser) => (
+                <Box key={roleUser.id || roleUser.email} sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="space-between">
+                    <Box>
+                      <Typography fontWeight={800}>{roleUser.email || "Email unavailable"}</Typography>
+                      <Typography color="text.secondary">
+                        Created {roleUser.createdAt ? new Date(roleUser.createdAt).toLocaleString("en-SG") : "unknown"} · Last sign-in {roleUser.lastSignInAt ? new Date(roleUser.lastSignInAt).toLocaleString("en-SG") : "never"}
+                      </Typography>
+                    </Box>
+                    <Chip label={roleUser.appRole || "participant"} color={roleUser.appRole === "admin" ? "error" : roleUser.appRole === "volunteer" ? "warning" : "default"} />
+                  </Stack>
+                </Box>
+              ))}
+              {!roleUsers?.users.length ? <Typography color="text.secondary">No role users to display yet.</Typography> : null}
+            </Stack>
+          </Stack>
+        ) : null}
+
+        {tab === 11 && event ? (
           <Stack spacing={2}>
             <Typography variant="h5">Exports</Typography>
             <Typography color="text.secondary">

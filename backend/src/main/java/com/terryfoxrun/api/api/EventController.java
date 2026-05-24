@@ -43,6 +43,22 @@ public class EventController {
         return ResponseEntity.ok(eventService.getCategories(id));
     }
 
+    @PostMapping("/{id}/categories")
+    public ResponseEntity<CategoryDto> createCategory(@PathVariable Long id, @RequestBody CategoryDto request) {
+        return ResponseEntity.ok(eventService.createCategory(id, request));
+    }
+
+    @PatchMapping("/{id}/categories/{categoryId}")
+    public ResponseEntity<CategoryDto> updateCategory(@PathVariable Long categoryId, @RequestBody CategoryDto request) {
+        return ResponseEntity.ok(eventService.updateCategory(categoryId, request));
+    }
+
+    @DeleteMapping("/{id}/categories/{categoryId}")
+    public ResponseEntity<Void> deleteCategory(@PathVariable Long categoryId) {
+        eventService.deleteCategory(categoryId);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{id}/slideshow")
     public ResponseEntity<List<EventSlideshowImageDto>> getSlideshow(@PathVariable Long id) {
         return ResponseEntity.ok(eventService.getSlideshowImages(id));

@@ -9,6 +9,8 @@ import java.util.Optional;
 
 public interface RegistrationParticipantRepository extends JpaRepository<RegistrationParticipant, Long> {
     List<RegistrationParticipant> findByRegistration(Registration registration);
+    List<RegistrationParticipant> findByRegistrationIn(List<Registration> registrations);
+    List<RegistrationParticipant> findByRegistration_Event_Id(Long eventId);
     Optional<RegistrationParticipant> findByPickupToken(String pickupToken);
     Optional<RegistrationParticipant> findByPickupCode(String pickupCode);
 }

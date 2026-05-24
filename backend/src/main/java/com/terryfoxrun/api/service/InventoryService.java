@@ -60,7 +60,8 @@ public class InventoryService {
         String normalizedSize = size == null || size.isBlank() ? "ALL" : size;
         Map<String, Integer> totals = new TreeMap<>();
         for (InventoryMovement movement : inventoryMovementRepository.findByEventOrderByCreatedAtAsc(event)) {
-            if (!"REGISTRATION_PAYMENT_CONFIRMED".equals(movement.getReason())) {
+            if (!"REGISTRATION_PAYMENT_CONFIRMED".equals(movement.getReason())
+                    && !"REGISTRATION_NO_PAYMENT_REQUIRED".equals(movement.getReason())) {
                 continue;
             }
             if (!"ALL".equalsIgnoreCase(normalizedSize) && !normalizedSize.equalsIgnoreCase(movement.getSize())) {
