@@ -392,12 +392,50 @@ test("email login page signs in with password", async ({ page }) => {
   await page.goto("/login");
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("Email address").fill("harlanivikas@gmail.com");
-  await page.getByLabel("Password").fill("terryfoxrun");
+  await page.getByLabel("Password").fill("test-password-123");
   await page.getByRole("button", { name: "Sign in" }).click();
 
   await expect(page).toHaveURL("/");
   await expect(page.getByText("Successfully signed in.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Terry Fox Run Singapore, 2026" })).toBeVisible();
+});
+
+test("email login page supports account confirmation and reset resend flows", async ({ page }) => {
+  await page.route("https://lhpondhrhnjnimvyozdc.supabase.co/auth/v1/signup**", (route) =>
+    route.fulfill({
+      json: {
+        user: {
+          id: "new-user",
+          aud: "authenticated",
+          role: "authenticated",
+          email: "new@example.com",
+          app_metadata: {},
+          user_metadata: {},
+        },
+        session: null,
+      },
+    }),
+  );
+  await page.route("https://lhpondhrhnjnimvyozdc.supabase.co/auth/v1/resend**", (route) => route.fulfill({ json: {} }));
+  await page.route("https://lhpondhrhnjnimvyozdc.supabase.co/auth/v1/recover**", (route) => route.fulfill({ json: {} }));
+
+  await page.goto("/login");
+  await page.getByRole("tab", { name: "Create account" }).click();
+  await page.getByLabel("Email address").fill("new@example.com");
+  await page.getByLabel("Password").fill("test-password-123");
+  await page.getByRole("button", { name: "Create account" }).click();
+
+  await expect(page.getByText("Account created. Please check your email to confirm the account before signing in.")).toBeVisible();
+  await page.getByRole("button", { name: "Send again" }).click();
+  await expect(page.getByText("Confirmation email resent. Please check your inbox.")).toBeVisible();
+
+  await page.getByRole("tab", { name: "Forgot password" }).click();
+  await page.getByLabel("Email address").fill("new@example.com");
+  await page.getByRole("button", { name: "Send reset link" }).click();
+
+  await expect(page.getByText("Password reset email sent. Please check your inbox.")).toBeVisible();
+  await page.getByRole("button", { name: "Send again" }).click();
+  await expect(page.getByText("Password reset email resent. Please check your inbox.")).toBeVisible();
 });
 
 test("public pages and mobile-first registration checkout flow", async ({ page }) => {

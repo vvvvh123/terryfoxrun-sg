@@ -16,57 +16,32 @@ public class LocalEmailService implements EmailService {
 
     @Override
     public void sendPendingPaymentEmail(Registration registration) {
-        store(new EmailPreview(
-                "pending-payment",
-                registration.getPayerEmail(),
-                "Terry Fox Run payment pending",
-                "We received your payment submission for reference " + registration.getGeneratedPaymentReference() + ".",
-                registration.getId(),
-                Instant.now()));
+        record(pendingPaymentPreview(registration));
     }
 
     @Override
     public void sendPaymentConfirmedEmail(Registration registration) {
-        store(new EmailPreview(
-                "payment-confirmed",
-                registration.getPayerEmail(),
-                "Terry Fox Run registration confirmed",
-                "Your registration is confirmed. Your pickup code is available in My Events.",
-                registration.getId(),
-                Instant.now()));
+        record(paymentConfirmedPreview(registration));
     }
 
     @Override
     public void sendPaymentRejectedEmail(Registration registration, String reason) {
-        store(new EmailPreview(
-                "payment-rejected",
-                registration.getPayerEmail(),
-                "Terry Fox Run payment needs attention",
-                "Your payment could not be confirmed: " + reason,
-                registration.getId(),
-                Instant.now()));
+        record(paymentRejectedPreview(registration, reason));
     }
 
     @Override
     public void sendContactSubmissionEmail(String recipientEmail, String fromEmail, String senderName, String message) {
-        store(new EmailPreview(
-                "contact-submission",
-                recipientEmail,
-                "Terry Fox Run website contact submission",
-                senderName + " (" + fromEmail + ") wrote: " + message,
-                null,
-                Instant.now()));
+        record(contactSubmissionPreview(recipientEmail, fromEmail, senderName, message));
+    }
+
+    @Override
+    public void sendAnnouncementEmail(String recipientEmail, String subject, String body) {
+        record(announcementPreview(recipientEmail, subject, body));
     }
 
     @Override
     public void sendCampaignPreview(String audience, String subject, String body) {
-        store(new EmailPreview(
-                "email-campaign-preview",
-                audience,
-                subject,
-                body,
-                null,
-                Instant.now()));
+        record(campaignPreview(audience, subject, body));
     }
 
     public List<EmailPreview> sentEmails() {
@@ -77,8 +52,68 @@ public class LocalEmailService implements EmailService {
         sentEmails.clear();
     }
 
-    private void store(EmailPreview preview) {
+    public void record(EmailPreview preview) {
         sentEmails.add(preview);
         log.info("Email preview [{}] to {} for registration {}", preview.template(), preview.to(), preview.registrationId());
+    }
+
+    static EmailPreview pendingPaymentPreview(Registration registration) {
+        return new EmailPreview(
+                "pending-payment",
+                registration.getPayerEmail(),
+                "Terry Fox Run payment pending",
+                "We received your payment submission for reference " + registration.getGeneratedPaymentReference() + ".",
+                registration.getId(),
+                Instant.now());
+    }
+
+    static EmailPreview paymentConfirmedPreview(Registration registration) {
+        return new EmailPreview(
+                "payment-confirmed",
+                registration.getPayerEmail(),
+                "Terry Fox Run registration confirmed",
+                "Your registration is confirmed. Your pickup code is available in My Events.",
+                registration.getId(),
+                Instant.now());
+    }
+
+    static EmailPreview paymentRejectedPreview(Registration registration, String reason) {
+        return new EmailPreview(
+                "payment-rejected",
+                registration.getPayerEmail(),
+                "Terry Fox Run payment needs attention",
+                "Your payment could not be confirmed: " + reason,
+                registration.getId(),
+                Instant.now());
+    }
+
+    static EmailPreview contactSubmissionPreview(String recipientEmail, String fromEmail, String senderName, String message) {
+        return new EmailPreview(
+                "contact-submission",
+                recipientEmail,
+                "Terry Fox Run website contact submission",
+                senderName + " (" + fromEmail + ") wrote: " + message,
+                null,
+                Instant.now());
+    }
+
+    static EmailPreview announcementPreview(String recipientEmail, String subject, String body) {
+        return new EmailPreview(
+                "announcement",
+                recipientEmail,
+                subject,
+                body,
+                null,
+                Instant.now());
+    }
+
+    static EmailPreview campaignPreview(String audience, String subject, String body) {
+        return new EmailPreview(
+                "email-campaign-preview",
+                audience,
+                subject,
+                body,
+                null,
+                Instant.now());
     }
 }

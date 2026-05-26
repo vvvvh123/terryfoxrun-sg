@@ -11,5 +11,7 @@ public interface EmailService {
 
     void sendContactSubmissionEmail(String recipientEmail, String fromEmail, String senderName, String message);
 
+    void sendAnnouncementEmail(String recipientEmail, String subject, String body);
+
     void sendCampaignPreview(String audience, String subject, String body);
 }

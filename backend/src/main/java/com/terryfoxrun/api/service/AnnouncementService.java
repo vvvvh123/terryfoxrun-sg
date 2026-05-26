@@ -2,12 +2,16 @@ package com.terryfoxrun.api.service;
 
 import com.terryfoxrun.api.domain.Announcement;
 import com.terryfoxrun.api.domain.Event;
+import com.terryfoxrun.api.domain.Registration;
 import com.terryfoxrun.api.dto.AnnouncementDto;
 import com.terryfoxrun.api.dto.AnnouncementRequest;
 import com.terryfoxrun.api.repo.AnnouncementRepository;
 import com.terryfoxrun.api.repo.EventRepository;
+import com.terryfoxrun.api.repo.RegistrationRepository;
+import com.terryfoxrun.api.service.email.EmailService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -18,10 +22,17 @@ public class AnnouncementService {
 
     private final EventRepository eventRepository;
     private final AnnouncementRepository announcementRepository;
+    private final RegistrationRepository registrationRepository;
+    private final EmailService emailService;
 
-    public AnnouncementService(EventRepository eventRepository, AnnouncementRepository announcementRepository) {
+    public AnnouncementService(EventRepository eventRepository,
+                               AnnouncementRepository announcementRepository,
+                               RegistrationRepository registrationRepository,
+                               EmailService emailService) {
         this.eventRepository = eventRepository;
         this.announcementRepository = announcementRepository;
+        this.registrationRepository = registrationRepository;
+        this.emailService = emailService;
     }
 
     @Transactional(readOnly = true)
@@ -56,7 +67,11 @@ public class AnnouncementService {
         ann.setChannelDashboard(request.channelDashboard());
         ann.setCreatedBy(createdBy);
         ann.setCreatedAt(LocalDateTime.now());
-        return announcementRepository.save(ann);
+        Announcement saved = announcementRepository.save(ann);
+        if (saved.isChannelEmail()) {
+            sendAnnouncementEmails(event, saved);
+        }
+        return saved;
     }
 
     @Transactional
@@ -74,5 +89,13 @@ public class AnnouncementService {
                 announcement.isChannelDashboard(),
                 announcement.getCreatedBy(),
                 announcement.getCreatedAt() == null ? null : announcement.getCreatedAt().toInstant(ZoneOffset.UTC));
+    }
+
+    private void sendAnnouncementEmails(Event event, Announcement announcement) {
+        registrationRepository.findByEvent(event).stream()
+                .map(Registration::getPayerEmail)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .forEach(email -> emailService.sendAnnouncementEmail(email, announcement.getTitle(), announcement.getBody()));
     }
 }

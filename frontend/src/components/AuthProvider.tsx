@@ -13,6 +13,7 @@ type AuthContextValue = {
   appRole: AppRole;
   signInWithPassword: (email: string, password: string) => Promise<void>;
   signUpWithPassword: (email: string, password: string) => Promise<{ signedIn: boolean }>;
+  resendSignUpEmail: (email: string) => Promise<void>;
   resetPasswordForEmail: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -20,6 +21,7 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const AUTH_TIMEOUT_MS = 20000;
+const AUTH_EMAIL_TIMEOUT_MS = 60000;
 
 function authErrorMessage(error: unknown, fallback: string) {
   if (error instanceof Error && error.message) {
@@ -38,7 +40,7 @@ function authErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
-async function withAuthTimeout<T>(operation: Promise<T>, action: string): Promise<T> {
+async function withAuthTimeout<T>(operation: Promise<T>, action: string, timeoutMs = AUTH_TIMEOUT_MS): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
@@ -47,7 +49,7 @@ async function withAuthTimeout<T>(operation: Promise<T>, action: string): Promis
           `${action} took too long. Please try again; if it keeps happening, check the Supabase Auth email/SMTP settings.`,
         ),
       );
-    }, AUTH_TIMEOUT_MS);
+    }, timeoutMs);
   });
 
   try {
@@ -62,6 +64,10 @@ async function withAuthTimeout<T>(operation: Promise<T>, action: string): Promis
 function getAppRole(user: User | null): AppRole {
   const role = user?.app_metadata?.app_role;
   return role === "admin" || role === "volunteer" ? role : "participant";
+}
+
+function callbackUrl(path = "/auth/callback") {
+  return `${window.location.origin}${path}`;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -98,29 +104,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       },
       async signUpWithPassword(email: string, password: string) {
-        const origin = window.location.origin;
         const { data, error } = await withAuthTimeout(
           supabase.auth.signUp({
             email,
             password,
             options: {
-              emailRedirectTo: `${origin}/auth/callback`,
+              emailRedirectTo: callbackUrl(),
             },
           }),
           "Creating the account",
+          AUTH_EMAIL_TIMEOUT_MS,
         );
         if (error) {
           throw new Error(authErrorMessage(error, "Could not create the account. Please try again."));
         }
         return { signedIn: Boolean(data.session) };
       },
+      async resendSignUpEmail(email: string) {
+        const { error } = await withAuthTimeout(
+          supabase.auth.resend({
+            type: "signup",
+            email,
+            options: {
+              emailRedirectTo: callbackUrl(),
+            },
+          }),
+          "Resending the confirmation email",
+          AUTH_EMAIL_TIMEOUT_MS,
+        );
+        if (error) {
+          throw new Error(authErrorMessage(error, "Could not resend the confirmation email. Please try again."));
+        }
+      },
       async resetPasswordForEmail(email: string) {
-        const origin = window.location.origin;
         const { error } = await withAuthTimeout(
           supabase.auth.resetPasswordForEmail(email, {
-            redirectTo: `${origin}/auth/callback?next=/reset-password`,
+            redirectTo: callbackUrl("/auth/callback?next=/reset-password"),
           }),
           "Sending the reset email",
+          AUTH_EMAIL_TIMEOUT_MS,
         );
         if (error) {
           throw new Error(authErrorMessage(error, "Could not send the reset email. Please try again."));
