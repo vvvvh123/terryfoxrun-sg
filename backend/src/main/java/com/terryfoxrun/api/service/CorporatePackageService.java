@@ -52,6 +52,7 @@ public class CorporatePackageService {
     private void apply(CorporatePackageDto dto, CorporatePackage pkg) {
         pkg.setPackageName(dto.packageName());
         pkg.setPrice(dto.price());
+        pkg.setTotalShirts(dto.totalShirts());
         pkg.setShirtAllocationRulesJson(dto.shirtAllocationRulesJson());
         pkg.setActive(dto.active());
     }
@@ -62,6 +63,7 @@ public class CorporatePackageService {
                 pkg.getEvent().getId(),
                 pkg.getPackageName(),
                 pkg.getPrice(),
+                pkg.getTotalShirts(),
                 pkg.getShirtAllocationRulesJson(),
                 pkg.isActive());
     }

@@ -44,6 +44,16 @@ public class LocalEmailService implements EmailService {
         record(campaignPreview(audience, subject, body));
     }
 
+    @Override
+    public void sendCampaignEmail(String recipientEmail, String subject, String body) {
+        record(campaignEmail(recipientEmail, subject, body));
+    }
+
+    @Override
+    public boolean isLiveDeliveryAvailable() {
+        return false;
+    }
+
     public List<EmailPreview> sentEmails() {
         return List.copyOf(sentEmails);
     }
@@ -111,6 +121,16 @@ public class LocalEmailService implements EmailService {
         return new EmailPreview(
                 "email-campaign-preview",
                 audience,
+                subject,
+                body,
+                null,
+                Instant.now());
+    }
+
+    static EmailPreview campaignEmail(String recipientEmail, String subject, String body) {
+        return new EmailPreview(
+                "email-campaign",
+                recipientEmail,
                 subject,
                 body,
                 null,

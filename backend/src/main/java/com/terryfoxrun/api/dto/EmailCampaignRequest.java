@@ -6,6 +6,6 @@ public record EmailCampaignRequest(
         @NotBlank String audience,
         @NotBlank String subject,
         @NotBlank String body,
-        boolean sendPreview
+        @NotBlank String deliveryMode
 ) {
 }

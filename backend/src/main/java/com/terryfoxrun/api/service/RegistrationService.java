@@ -39,6 +39,8 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class RegistrationService {
@@ -213,6 +215,18 @@ public class RegistrationService {
     @Transactional(readOnly = true)
     public Optional<RegistrationDetailDto> getRegistrationDetail(Long id) {
         return registrationRepository.findById(id).map(this::toDetailDto);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<RegistrationDetailDto> getRegistrationDetailForUser(Long id, String payerUserId, boolean admin) {
+        Optional<Registration> registration = registrationRepository.findById(id);
+        if (registration.isEmpty()) {
+            return Optional.empty();
+        }
+        if (!admin && !Objects.equals(registration.get().getPayerUserId(), payerUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Registration belongs to another user.");
+        }
+        return registration.map(this::toDetailDto);
     }
 
     @Transactional(readOnly = true)

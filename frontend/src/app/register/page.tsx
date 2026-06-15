@@ -23,23 +23,46 @@ import {
 } from "@mui/material";
 import Grid from "@mui/material/GridLegacy";
 import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
+import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import QrCode2Icon from "@mui/icons-material/QrCode2";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
-import { CategoryDto, EventDto, FormFieldConfig, ParticipantInput, RegistrationCreateResponse, ShirtOrder, createRegistration, getCategories, getCurrentEvent, getFormFields, submitPayment, uploadPaymentProof } from "@/lib/api";
+import {
+  CategoryDto,
+  EventDto,
+  FormFieldConfig,
+  ParticipantInput,
+  RegistrationCreateResponse,
+  ShirtOrder,
+  createRegistration,
+  getCategories,
+  getCurrentEvent,
+  getFormFields,
+  submitPayment,
+  uploadPaymentProof,
+} from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 import { defaultFormFields, isFieldRequired, isFieldVisible } from "@/lib/registrationFields";
+
+type ShirtType = "adult" | "kid";
+
+type ShirtSelectionRow = {
+  id: string;
+  type: ShirtType;
+  size: string;
+  quantity: number;
+};
 
 type ParticipantForm = {
   name: string;
   email: string;
   phone: string;
   categoryId: number;
-  shirtOrders: Record<string, number>;
+  shirtOrders: ShirtSelectionRow[];
 };
 
-const sizes = ["XS", "S", "M", "L", "XL", "XXL"];
 const donationPresets = [0, 20, 50, 100];
 
 const fallbackPaymentInstructions = {
@@ -61,13 +84,33 @@ function formatDate(value?: string) {
   return new Intl.DateTimeFormat("en-SG", { dateStyle: "full", timeStyle: "short" }).format(new Date(value));
 }
 
-const emptyParticipant = (categoryId = 0): ParticipantForm => ({
-  name: "",
-  email: "",
-  phone: "",
-  categoryId,
-  shirtOrders: {},
-});
+function displayIntegerInput(value?: number) {
+  if (!value) return "";
+  return String(value);
+}
+
+function normalizeShirtType(type?: string): ShirtType {
+  return type?.toLowerCase() === "kid" ? "kid" : "adult";
+}
+
+function createRow(type: ShirtType, size: string): ShirtSelectionRow {
+  return {
+    id: `${type}-${size}-${Math.random().toString(36).slice(2, 8)}`,
+    type,
+    size,
+    quantity: 1,
+  };
+}
+
+function emptyParticipant(categoryId = 0): ParticipantForm {
+  return {
+    name: "",
+    email: "",
+    phone: "",
+    categoryId,
+    shirtOrders: [],
+  };
+}
 
 function TShirtImage({ src, alt }: { src?: string; alt: string }) {
   if (!src) return null;
@@ -117,7 +160,7 @@ export default function RegisterPage() {
   const [primaryParticipant, setPrimaryParticipant] = useState<ParticipantForm>(emptyParticipant());
   const [participants, setParticipants] = useState<ParticipantForm[]>([]);
   const [formFields, setFormFields] = useState<FormFieldConfig[]>(defaultFormFields);
-  const [donationAmount, setDonationAmount] = useState(50);
+  const [donationAmount, setDonationAmount] = useState(20);
   const [indemnityAccepted, setIndemnityAccepted] = useState(false);
   const [created, setCreated] = useState<RegistrationCreateResponse | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<"PAYNOW" | "BANK_TRANSFER">("PAYNOW");
@@ -126,13 +169,22 @@ export default function RegisterPage() {
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
   const shirtPrice = event?.shirtPrice ?? 3500;
-  const shirtType = event?.shirtSizes?.[0]?.type ?? "adult";
   const paymentInstructions = event?.paymentInstructions ?? fallbackPaymentInstructions;
-  const availableSizes = event?.shirtSizes?.length ? Array.from(new Set(event.shirtSizes.map((item) => item.size))) : sizes;
+  const eventDetails = event?.eventDetails;
   const required = (key: string) => isFieldRequired(formFields, key);
   const visible = (key: string) => isFieldVisible(formFields, key);
-  const eventDetails = event?.eventDetails;
+
+  const sizeOptions = useMemo(() => {
+    const options = event?.shirtSizes ?? [];
+    const adult = Array.from(new Set(options.filter((item) => normalizeShirtType(item.type) === "adult").map((item) => item.size)));
+    const kid = Array.from(new Set(options.filter((item) => normalizeShirtType(item.type) === "kid").map((item) => item.size)));
+    return {
+      adult: adult.length ? adult : ["XS", "S", "M", "L", "XL", "XXL"],
+      kid,
+    };
+  }, [event?.shirtSizes]);
 
   useEffect(() => {
     getCurrentEvent()
@@ -150,16 +202,61 @@ export default function RegisterPage() {
   }, []);
 
   const participantShirtOrders = useCallback((participant: ParticipantForm): ShirtOrder[] => {
-    return availableSizes
-      .map((size) => ({ size, type: shirtType, quantity: Number(participant.shirtOrders[size] || 0) }))
-      .filter((shirt) => shirt.quantity > 0);
-  }, [availableSizes, shirtType]);
+    return participant.shirtOrders
+      .filter((shirt) => Number(shirt.quantity || 0) > 0)
+      .map((shirt) => ({ size: shirt.size, type: shirt.type, quantity: Number(shirt.quantity || 0) }));
+  }, []);
 
   const total = useMemo(() => {
     const allParticipants = [primaryParticipant, ...participants];
-    const shirts = allParticipants.reduce((sum, participant) => sum + participantShirtOrders(participant).reduce((shirtSum, shirt) => shirtSum + Number(shirt.quantity || 0) * shirtPrice, 0), 0);
+    const shirts = allParticipants.reduce(
+      (sum, participant) =>
+        sum + participantShirtOrders(participant).reduce((shirtSum, shirt) => shirtSum + Number(shirt.quantity || 0) * shirtPrice, 0),
+      0,
+    );
     return shirts + Number(donationAmount || 0) * 100;
   }, [donationAmount, participantShirtOrders, participants, primaryParticipant, shirtPrice]);
+
+  function getTypeSizes(type: ShirtType) {
+    return type === "kid" ? sizeOptions.kid : sizeOptions.adult;
+  }
+
+  function addShirtRow(participant: ParticipantForm, type: ShirtType = "adult"): ParticipantForm {
+    const options = getTypeSizes(type);
+    const existingSizes = new Set(participant.shirtOrders.filter((row) => row.type === type).map((row) => row.size));
+    const nextSize = options.find((size) => !existingSizes.has(size)) ?? options[0];
+    if (!nextSize) return participant;
+    return {
+      ...participant,
+      shirtOrders: [...participant.shirtOrders, createRow(type, nextSize)],
+    };
+  }
+
+  function updateShirtRow(participant: ParticipantForm, rowId: string, patch: Partial<ShirtSelectionRow>): ParticipantForm {
+    return {
+      ...participant,
+      shirtOrders: participant.shirtOrders.map((row) => {
+        if (row.id !== rowId) return row;
+        const nextType = patch.type ?? row.type;
+        const nextSizeOptions = getTypeSizes(nextType);
+        const nextSize = patch.size ?? (nextSizeOptions.includes(row.size) ? row.size : nextSizeOptions[0]);
+        return {
+          ...row,
+          ...patch,
+          type: nextType,
+          size: nextSize ?? row.size,
+          quantity: patch.quantity == null ? row.quantity : Math.max(0, patch.quantity),
+        };
+      }),
+    };
+  }
+
+  function removeShirtRow(participant: ParticipantForm, rowId: string): ParticipantForm {
+    return {
+      ...participant,
+      shirtOrders: participant.shirtOrders.filter((row) => row.id !== rowId),
+    };
+  }
 
   function updateParticipant(index: number, patch: Partial<ParticipantForm>) {
     setParticipants((current) => current.map((participant, currentIndex) => (currentIndex === index ? { ...participant, ...patch } : participant)));
@@ -167,16 +264,6 @@ export default function RegisterPage() {
 
   function updatePrimaryParticipant(patch: Partial<ParticipantForm>) {
     setPrimaryParticipant((current) => ({ ...current, ...patch }));
-  }
-
-  function updateParticipantShirt(participant: ParticipantForm, size: string, quantity: number): ParticipantForm {
-    return {
-      ...participant,
-      shirtOrders: {
-        ...participant.shirtOrders,
-        [size]: Math.max(0, quantity),
-      },
-    };
   }
 
   function validateRegistration() {
@@ -193,8 +280,15 @@ export default function RegisterPage() {
     if (!primaryParticipant.categoryId) return "Please choose a category for the primary participant.";
     const allParticipants = [primaryParticipant, ...participants];
     const missingCategoryIndex = allParticipants.findIndex((participant) => !participant.categoryId);
-    if (missingCategoryIndex >= 0) return `Please choose a category for ${missingCategoryIndex === 0 ? "the primary participant" : `additional participant ${missingCategoryIndex}`}.`;
-    const negativeShirtIndex = allParticipants.findIndex((participant) => Object.values(participant.shirtOrders).some((quantity) => Number(quantity || 0) < 0));
+    if (missingCategoryIndex >= 0) {
+      return `Please choose a category for ${missingCategoryIndex === 0 ? "the primary participant" : `additional participant ${missingCategoryIndex}`}.`;
+    }
+    const duplicateShirtIndex = allParticipants.findIndex((participant) => {
+      const combinations = participant.shirtOrders.map((shirt) => `${shirt.type}:${shirt.size}`);
+      return new Set(combinations).size !== combinations.length;
+    });
+    if (duplicateShirtIndex >= 0) return "Please use each shirt size only once per participant.";
+    const negativeShirtIndex = allParticipants.findIndex((participant) => participant.shirtOrders.some((shirt) => Number(shirt.quantity || 0) < 0));
     if (negativeShirtIndex >= 0) return "T-shirt quantity cannot be negative.";
     if (Number(donationAmount || 0) < 0) return "Donation amount cannot be negative.";
     if (!indemnityAccepted) return "Please accept the indemnity and PDPA consent before checkout.";
@@ -262,15 +356,14 @@ export default function RegisterPage() {
       }
       setCheckoutStep("instructions");
       setProofFile(null);
-      setMessage("Registration created. Please complete your PayNow or bank-transfer payment.");
+      setMessage("Registration created. Please complete your payment to finish checkout.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Registration failed.");
     }
   }
 
   async function handleSubmitPayment(skipProofUpload = false) {
-    if (!created) return;
-    if (!user) return;
+    if (!created || !user) return;
     setError("");
     setSubmittingPayment(true);
     try {
@@ -300,7 +393,7 @@ export default function RegisterPage() {
     setCreated(null);
     setProofFile(null);
     setCheckoutStep("instructions");
-    setMessage("Payment cancelled. Your draft registration is not submitted for verification until you complete payment.");
+    setMessage("Payment cancelled. Your registration will stay in draft until you return to checkout.");
   }
 
   function copyText(value: string) {
@@ -325,13 +418,107 @@ export default function RegisterPage() {
     );
   }
 
+  function renderShirtSection(
+    participant: ParticipantForm,
+    onChange: (next: ParticipantForm) => void,
+    labelPrefix: string,
+  ) {
+    return (
+      <Box sx={{ mt: 1 }}>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="space-between">
+          <Typography fontWeight={800}>T-shirts</Typography>
+          <Typography color="text.secondary">{formatMoney(shirtPrice)} each</Typography>
+        </Stack>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          Choose any sizes you would like for this participant. Leave this empty if no T-shirt is needed.
+        </Typography>
+        <Stack spacing={1.25} sx={{ mt: 1.5 }}>
+          {participant.shirtOrders.map((row, rowIndex) => {
+            const typeOptions: ShirtType[] = sizeOptions.kid.length ? ["adult", "kid"] : ["adult"];
+            const sizeChoices = getTypeSizes(row.type);
+            const usedSizes = new Set(
+              participant.shirtOrders
+                .filter((item) => item.type === row.type && item.id !== row.id)
+                .map((item) => item.size),
+            );
+            const allowedSizes = sizeChoices.filter((size) => size === row.size || !usedSizes.has(size));
+            return (
+              <Grid container spacing={1.25} key={row.id} alignItems="center">
+                <Grid item xs={12} sm={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Type</InputLabel>
+                    <Select
+                      label="Type"
+                      value={row.type}
+                      onChange={(event) => onChange(updateShirtRow(participant, row.id, { type: event.target.value as ShirtType }))}
+                      inputProps={{ "aria-label": `${labelPrefix} shirt type ${rowIndex + 1}` }}
+                    >
+                      {typeOptions.map((type) => (
+                        <MenuItem key={type} value={type}>
+                          {type === "adult" ? "Adult" : "Kids"}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <FormControl fullWidth>
+                    <InputLabel>Size</InputLabel>
+                    <Select
+                      label="Size"
+                      value={row.size}
+                      onChange={(event) => onChange(updateShirtRow(participant, row.id, { size: String(event.target.value) }))}
+                      inputProps={{ "aria-label": `${labelPrefix} shirt size ${rowIndex + 1}` }}
+                    >
+                      {allowedSizes.map((size) => (
+                        <MenuItem key={size} value={size}>
+                          {size}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={9} sm={3}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Quantity"
+                    value={displayIntegerInput(row.quantity)}
+                    inputProps={{ min: 0, "aria-label": `${labelPrefix} shirt quantity ${rowIndex + 1}` }}
+                    onChange={(event) => onChange(updateShirtRow(participant, row.id, { quantity: Number(event.target.value || 0) }))}
+                  />
+                </Grid>
+                <Grid item xs={3} sm={1}>
+                  <IconButton
+                    aria-label={`Remove shirt selection ${rowIndex + 1}`}
+                    color="error"
+                    onClick={() => onChange(removeShirtRow(participant, row.id))}
+                  >
+                    <DeleteOutlineIcon />
+                  </IconButton>
+                </Grid>
+              </Grid>
+            );
+          })}
+          {!participant.shirtOrders.length ? (
+            <Typography variant="body2" color="text.secondary">
+              No shirts selected yet.
+            </Typography>
+          ) : null}
+        </Stack>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mt: 1.5 }}>
+          <Button size="small" startIcon={<AddCircleOutlineIcon />} onClick={() => onChange(addShirtRow(participant, "adult"))}>
+            Add shirt size
+          </Button>
+        </Stack>
+      </Box>
+    );
+  }
+
   return (
     <Stack spacing={3}>
       <Box>
         <Typography variant="h3">Register</Typography>
-        <Typography color="text.secondary" sx={{ mt: 1 }}>
-          Mobile-friendly participant registration with PayNow or bank transfer manual verification.
-        </Typography>
       </Box>
       {error ? <Alert severity="warning">{error}</Alert> : null}
       {message ? <Alert severity="success">{message}</Alert> : null}
@@ -344,15 +531,16 @@ export default function RegisterPage() {
             </Button>
           }
         >
-          Sign in before checkout so we can save registrations, receipts, and pickup codes to My Events.
+          Sign in before checkout so we can save your registration, receipt, and pickup code in My Events.
         </Alert>
       ) : null}
+
       <Paper sx={{ p: 3 }}>
         <Stack spacing={2.5}>
           <Box>
             <Typography variant="h4">{event ? `${event.name}, ${event.year}` : "Event overview"}</Typography>
             <Typography color="text.secondary" sx={{ mt: 1, maxWidth: 900 }}>
-              Review this year&apos;s run details before completing registration.
+              Review the run details below before completing your registration.
             </Typography>
           </Box>
           <Grid container spacing={2}>
@@ -378,7 +566,11 @@ export default function RegisterPage() {
           {(eventDetails?.scheduleSummary || eventDetails?.routeNotes) ? (
             <Box>
               {eventDetails?.scheduleSummary ? <Typography>{eventDetails.scheduleSummary}</Typography> : null}
-              {eventDetails?.routeNotes ? <Typography color="text.secondary" sx={{ mt: 0.5 }}>{eventDetails.routeNotes}</Typography> : null}
+              {eventDetails?.routeNotes ? (
+                <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                  {eventDetails.routeNotes}
+                </Typography>
+              ) : null}
             </Box>
           ) : null}
           <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
@@ -388,12 +580,16 @@ export default function RegisterPage() {
           </Stack>
         </Stack>
       </Paper>
+
       <Paper sx={{ p: 3 }}>
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={5}>
             <Grid container spacing={1.5}>
               <Grid item xs={12} sm={6}>
-                <TShirtImage src={eventDetails?.tshirtFrontImageUrl || eventDetails?.tshirtBackImageUrl || "/paynow-placeholder.svg"} alt="T-shirt front design" />
+                <TShirtImage
+                  src={eventDetails?.tshirtFrontImageUrl || eventDetails?.tshirtBackImageUrl || "/paynow-placeholder.svg"}
+                  alt="T-shirt front design"
+                />
               </Grid>
               {eventDetails?.tshirtBackImageUrl ? (
                 <Grid item xs={12} sm={6}>
@@ -405,7 +601,7 @@ export default function RegisterPage() {
           <Grid item xs={12} md={7}>
             <Typography variant="h5">{eventDetails?.tshirtTitle ?? `${event?.year ?? ""} Terry Fox Run T-Shirt`}</Typography>
             <Typography color="text.secondary" sx={{ mt: 1, whiteSpace: "pre-line" }}>
-              {eventDetails?.tshirtDescription ?? "T-shirt design and sizing information will be confirmed by the committee."}
+              {eventDetails?.tshirtDescription ?? "T-shirt design and sizing information will be published here."}
             </Typography>
             <Chip sx={{ mt: 2 }} label={`${formatMoney(shirtPrice)} each`} />
             {eventDetails?.pickupDisclaimer ? <Alert severity="info" sx={{ mt: 2 }}>{eventDetails.pickupDisclaimer}</Alert> : null}
@@ -414,17 +610,23 @@ export default function RegisterPage() {
           {(eventDetails?.kidsSizeChartImageUrl || eventDetails?.adultSizeChartImageUrl) ? (
             <Grid item xs={12}>
               <Divider sx={{ my: 1 }} />
-              <Typography variant="h6" sx={{ mb: 1.5 }}>Size charts</Typography>
+              <Typography variant="h6" sx={{ mb: 1.5 }}>
+                Size charts
+              </Typography>
               <Grid container spacing={2}>
                 {eventDetails?.kidsSizeChartImageUrl ? (
                   <Grid item xs={12} md={6}>
-                    <Typography fontWeight={800} sx={{ mb: 1 }}>Kids</Typography>
+                    <Typography fontWeight={800} sx={{ mb: 1 }}>
+                      Kids
+                    </Typography>
                     <TShirtImage src={eventDetails.kidsSizeChartImageUrl} alt="Kids T-shirt size chart" />
                   </Grid>
                 ) : null}
                 {eventDetails?.adultSizeChartImageUrl ? (
                   <Grid item xs={12} md={6}>
-                    <Typography fontWeight={800} sx={{ mb: 1 }}>Adult</Typography>
+                    <Typography fontWeight={800} sx={{ mb: 1 }}>
+                      Adult
+                    </Typography>
                     <TShirtImage src={eventDetails.adultSizeChartImageUrl} alt="Adult T-shirt size chart" />
                   </Grid>
                 ) : null}
@@ -433,6 +635,7 @@ export default function RegisterPage() {
           ) : null}
         </Grid>
       </Paper>
+
       <Grid container spacing={2}>
         <Grid item xs={12} lg={8}>
           <Stack spacing={2}>
@@ -469,33 +672,19 @@ export default function RegisterPage() {
                     </Select>
                   </FormControl>
                 </Grid>
-                {visible("tshirtSize") ? (
-                  <Grid item xs={12}>
-                    <Typography fontWeight={800} sx={{ mb: 1 }}>T-shirts</Typography>
-                    <Grid container spacing={1.25}>
-                      {availableSizes.map((size) => (
-                        <Grid item xs={6} sm={4} md={2} key={size}>
-                          <TextField
-                            fullWidth
-                            type="number"
-                            label={size}
-                            value={primaryParticipant.shirtOrders[size] ?? 0}
-                            inputProps={{ min: 0, "aria-label": `Primary ${size} quantity` }}
-                            onChange={(e) => updatePrimaryParticipant(updateParticipantShirt(primaryParticipant, size, Number(e.target.value)))}
-                          />
-                        </Grid>
-                      ))}
-                    </Grid>
-                    <Typography variant="caption" color="text.secondary">Use 0 for every size if you only want to register/donate.</Typography>
-                  </Grid>
-                ) : null}
+                <Grid item xs={12}>
+                  {renderShirtSection(primaryParticipant, setPrimaryParticipant, "Primary participant")}
+                </Grid>
               </Grid>
             </Paper>
+
             <Paper sx={{ p: 3 }}>
               <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ sm: "center" }} justifyContent="space-between">
                 <Box>
                   <Typography variant="h5">Additional Participants</Typography>
-                  <Typography color="text.secondary">Category is required per participant. Name, email, and phone are optional for additional participants.</Typography>
+                  <Typography color="text.secondary">
+                    Category is required per participant. Name, email, and phone are optional for additional participants.
+                  </Typography>
                 </Box>
                 <Button variant="outlined" onClick={() => setParticipants([...participants, emptyParticipant(categories[0]?.id ?? 0)])}>
                   Add participant
@@ -536,25 +725,9 @@ export default function RegisterPage() {
                           </Select>
                         </FormControl>
                       </Grid>
-                      {visible("tshirtSize") ? (
-                        <Grid item xs={12}>
-                          <Typography fontWeight={800} sx={{ mb: 1 }}>T-shirts</Typography>
-                          <Grid container spacing={1.25}>
-                            {availableSizes.map((size) => (
-                              <Grid item xs={6} sm={4} md={2} key={size}>
-                                <TextField
-                                  fullWidth
-                                  type="number"
-                                  label={size}
-                                  value={participant.shirtOrders[size] ?? 0}
-                                  inputProps={{ min: 0, "aria-label": `Additional participant ${index + 1} ${size} quantity` }}
-                                  onChange={(e) => updateParticipant(index, updateParticipantShirt(participant, size, Number(e.target.value)))}
-                                />
-                              </Grid>
-                            ))}
-                          </Grid>
-                        </Grid>
-                      ) : null}
+                      <Grid item xs={12}>
+                        {renderShirtSection(participant, (next) => updateParticipant(index, next), `Additional participant ${index + 1}`)}
+                      </Grid>
                     </Grid>
                   </Box>
                 ))}
@@ -562,6 +735,7 @@ export default function RegisterPage() {
             </Paper>
           </Stack>
         </Grid>
+
         <Grid item xs={12} lg={4}>
           <Stack spacing={2}>
             <Paper sx={{ p: 3 }}>
@@ -572,11 +746,7 @@ export default function RegisterPage() {
               <Grid container spacing={1} sx={{ mt: 2 }}>
                 {donationPresets.map((amount) => (
                   <Grid item xs={6} sm={3} lg={6} key={amount}>
-                    <Button
-                      fullWidth
-                      variant={donationAmount === amount ? "contained" : "outlined"}
-                      onClick={() => setDonationAmount(amount)}
-                    >
+                    <Button fullWidth variant={donationAmount === amount ? "contained" : "outlined"} onClick={() => setDonationAmount(amount)}>
                       ${amount}
                     </Button>
                   </Grid>
@@ -586,12 +756,13 @@ export default function RegisterPage() {
                 fullWidth
                 type="number"
                 label="Custom donation"
-                value={donationAmount}
+                value={displayIntegerInput(donationAmount)}
                 inputProps={{ min: 0 }}
-                onChange={(e) => setDonationAmount(Math.max(0, Number(e.target.value)))}
+                onChange={(e) => setDonationAmount(Math.max(0, Number(e.target.value || 0)))}
                 sx={{ mt: 2 }}
               />
             </Paper>
+
             <Paper sx={{ p: 3 }}>
               <Typography variant="h5">Review</Typography>
               <Box sx={{ mt: 2, p: 2, bgcolor: "#f6f7fb", borderRadius: 2 }}>
@@ -619,13 +790,14 @@ export default function RegisterPage() {
                 Continue to payment
               </Button>
             </Paper>
+
             {created ? (
               <Paper sx={{ p: 3 }}>
                 <Stack spacing={2}>
                   <Box>
                     <Typography variant="h5">Checkout</Typography>
                     <Typography color="text.secondary" sx={{ mt: 1 }}>
-                      Enter this reference in your payment comments so admin can match your transfer.
+                      Enter this reference in your payment comments so the Terry Fox Run team can match your transfer.
                     </Typography>
                   </Box>
                   <CopyableDetail label="Payment reference" value={created.generatedPaymentReference} />
@@ -678,34 +850,25 @@ export default function RegisterPage() {
                       <Button fullWidth variant="contained" startIcon={<CheckCircleOutlineIcon />} onClick={() => setCheckoutStep("proof")}>
                         I have paid
                       </Button>
-                      <Button fullWidth color="inherit" onClick={handleCancelPayment}>
+                      <Button fullWidth variant="text" color="inherit" onClick={handleCancelPayment}>
                         Cancel
                       </Button>
                     </>
                   ) : (
                     <>
-                      <Alert severity="info">
-                        A payment screenshot is optional, but it can help the admin team verify your payment faster.
-                      </Alert>
-                      <Button component="label" fullWidth variant="outlined" startIcon={<UploadFileIcon />}>
-                        Upload screenshot
-                        <input
-                          hidden
-                          type="file"
-                          accept="image/*,.pdf"
-                          onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
-                        />
+                      <Typography color="text.secondary">Uploading a payment screenshot is optional.</Typography>
+                      <Button component="label" variant="outlined" startIcon={<UploadFileIcon />}>
+                        {proofFile ? proofFile.name : "Upload screenshot"}
+                        <input hidden type="file" accept="image/*" onChange={(e) => setProofFile(e.target.files?.[0] ?? null)} />
                       </Button>
-                      {proofFile ? <Chip label={proofFile.name} variant="outlined" /> : null}
-                      <Button fullWidth variant="contained" disabled={submittingPayment || !proofFile} onClick={() => handleSubmitPayment(false)}>
-                        Submit payment proof
-                      </Button>
-                      <Button fullWidth disabled={submittingPayment} onClick={() => handleSubmitPayment(true)}>
-                        I don&apos;t wish to upload
-                      </Button>
-                      <Button fullWidth color="inherit" onClick={() => setCheckoutStep("instructions")}>
-                        Back to payment instructions
-                      </Button>
+                      <Stack spacing={1.5}>
+                        <Button fullWidth variant="contained" disabled={submittingPayment} onClick={() => handleSubmitPayment(false)}>
+                          Submit payment
+                        </Button>
+                        <Button fullWidth variant="outlined" disabled={submittingPayment} onClick={() => handleSubmitPayment(true)}>
+                          I don&apos;t wish to upload
+                        </Button>
+                      </Stack>
                     </>
                   )}
                 </Stack>

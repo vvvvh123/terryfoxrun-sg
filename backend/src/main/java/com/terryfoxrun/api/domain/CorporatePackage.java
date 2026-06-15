@@ -15,6 +15,7 @@ public class CorporatePackage {
 
     private String packageName;
     private Integer price;
+    private Integer totalShirts;
     @Column(columnDefinition = "jsonb")
     private String shirtAllocationRulesJson;
     private boolean active;
@@ -45,6 +46,14 @@ public class CorporatePackage {
 
     public void setPrice(Integer price) {
         this.price = price;
+    }
+
+    public Integer getTotalShirts() {
+        return totalShirts;
+    }
+
+    public void setTotalShirts(Integer totalShirts) {
+        this.totalShirts = totalShirts;
     }
 
     public String getShirtAllocationRulesJson() {

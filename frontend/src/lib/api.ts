@@ -3,6 +3,7 @@
 import { supabase } from "@/lib/supabase";
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8080";
+export const SITE_MEDIA_BUCKET = process.env.NEXT_PUBLIC_SITE_MEDIA_BUCKET ?? "site-media";
 
 export type EventDto = {
   id: number;
@@ -105,6 +106,7 @@ export type CorporatePackage = {
   eventId?: number;
   packageName: string;
   price: number;
+  totalShirts: number;
   shirtAllocationRulesJson: string;
   active: boolean;
 };
@@ -165,6 +167,11 @@ export type DailyInventorySold = {
   date: string;
   size: string;
   quantitySold: number;
+};
+
+export type EmailDeliveryConfig = {
+  smtpConfigured: boolean;
+  message: string;
 };
 
 export type ContactSubmissionRequest = {
@@ -508,6 +515,31 @@ export async function uploadPaymentProof(options: {
   return signed.data?.signedUrl ?? `supabase://${options.bucket}/${data.path}`;
 }
 
+export async function uploadSiteMedia(options: {
+  bucket?: string;
+  file: File;
+  eventId: number;
+  folder: "slideshow";
+}) {
+  const bucket = options.bucket ?? SITE_MEDIA_BUCKET;
+  const safeName = options.file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+  const path = `${options.folder}/${options.eventId}/${Date.now()}-${safeName}`;
+  const { data, error } = await supabase.storage.from(bucket).upload(path, options.file, {
+    cacheControl: "3600",
+    contentType: options.file.type || undefined,
+    upsert: false,
+  });
+  if (error) {
+    throw error;
+  }
+
+  const publicUrl = supabase.storage.from(bucket).getPublicUrl(data.path).data.publicUrl;
+  if (!publicUrl) {
+    throw new Error("Could not create a public URL for the uploaded image.");
+  }
+  return publicUrl;
+}
+
 export function getRegistration(id: number) {
   return api<RegistrationDetail>(`/api/registrations/${id}`);
 }
@@ -551,8 +583,8 @@ export function getInventory(eventId: number) {
   return api<ShirtInventoryItem[]>(`/api/events/${eventId}/inventory`);
 }
 
-export function getDailySold(eventId: number, size = "ALL") {
-  return api<DailyInventorySold[]>(`/api/events/${eventId}/inventory/sold-daily?size=${encodeURIComponent(size)}`);
+export function getDailySold(eventId: number, size = "ALL", type = "ALL") {
+  return api<DailyInventorySold[]>(`/api/events/${eventId}/inventory/sold-daily?size=${encodeURIComponent(size)}&type=${encodeURIComponent(type)}`);
 }
 
 export function updateInventory(eventId: number, items: ShirtInventoryItem[]) {
@@ -630,7 +662,11 @@ export function getEmailAudiences(eventId: number) {
   return api<EmailAudienceSegment[]>(`/api/events/${eventId}/email-campaigns/audiences`);
 }
 
-export function createEmailCampaign(eventId: number, request: { audience: string; subject: string; body: string; sendPreview: boolean }) {
+export function getEmailDeliveryConfig() {
+  return api<EmailDeliveryConfig>("/api/admin/email/configuration");
+}
+
+export function createEmailCampaign(eventId: number, request: { audience: string; subject: string; body: string; deliveryMode: "draft" | "preview" | "send" }) {
   return api<EmailCampaign>(`/api/events/${eventId}/email-campaigns`, {
     method: "POST",
     body: JSON.stringify(request),

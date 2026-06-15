@@ -17,6 +17,7 @@ import com.terryfoxrun.api.repo.PaymentAttemptRepository;
 import com.terryfoxrun.api.repo.RegistrationParticipantRepository;
 import com.terryfoxrun.api.repo.RegistrationRepository;
 import com.terryfoxrun.api.repo.RegistrationShirtRepository;
+import com.terryfoxrun.api.repo.ShirtInventoryRepository;
 import com.terryfoxrun.api.service.email.LocalEmailService;
 import com.terryfoxrun.api.repo.CategoryRepository;
 import java.util.List;
@@ -72,6 +73,9 @@ class MvpApiIntegrationTest {
 
     @Autowired
     private RegistrationShirtRepository registrationShirtRepository;
+
+    @Autowired
+    private ShirtInventoryRepository shirtInventoryRepository;
 
     @Autowired
     private LocalEmailService localEmailService;
@@ -518,6 +522,100 @@ class MvpApiIntegrationTest {
     }
 
     @Test
+    void eventSetupSaveDoesNotResetInventorySoldCounts() throws Exception {
+        Long eventId = eventRepository.findFirstByCurrentTrue().orElseThrow().getId();
+        var event = eventRepository.findById(eventId).orElseThrow();
+        Long categoryId = categoryRepository.findByEvent(event).get(0).getId();
+
+        RegistrationCreateRequest createRequest = new RegistrationCreateRequest(
+                eventId,
+                "Inventory Preserve",
+                "inventory-preserve@example.com",
+                "S8888888K",
+                "88 Inventory Road, Singapore",
+                "B-",
+                List.of(new ParticipantInput(
+                        categoryId,
+                        "Inventory Preserve",
+                        "inventory-preserve@example.com",
+                        "81238888",
+                        "Emergency Contact",
+                        "87658888",
+                        "1991-01-01",
+                        "Prefer not to say",
+                        "88 Inventory Road, Singapore",
+                        "888K",
+                        null,
+                        "M",
+                        "adult",
+                        1)),
+                20_00,
+                null,
+                true,
+                null,
+                null);
+
+        String createJson = mockMvc.perform(post("/api/registrations")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(createRequest)))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        Long registrationId = objectMapper.readTree(createJson).get("registrationId").asLong();
+        mockMvc.perform(post("/api/registrations/{registrationId}/payment-attempts", registrationId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(new PaymentSubmitRequest(
+                                com.terryfoxrun.api.domain.PaymentMethod.PAYNOW,
+                                "PAYNOW-INVENTORY-PRESERVE",
+                                null))))
+                .andExpect(status().isOk());
+        Long paymentAttemptId = paymentAttemptRepository.findAll().stream()
+                .filter(attempt -> attempt.getRegistration().getId().equals(registrationId))
+                .findFirst()
+                .orElseThrow()
+                .getId();
+        mockMvc.perform(post("/api/admin/payment-attempts/{id}/confirm", paymentAttemptId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "adminTransactionId", "BANK-INVENTORY-PRESERVE",
+                                "verifiedBy", "admin@example.com"))))
+                .andExpect(status().isOk());
+
+        var before = shirtInventoryRepository.findByEventIdAndTypeAndSize(eventId, "adult", "M").orElseThrow();
+        int availableBefore = before.getQuantityAvailable();
+        int soldBefore = before.getQuantitySold();
+
+        String eventJson = mockMvc.perform(get("/api/events/{eventId}", eventId))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        ObjectNode eventPayload = (ObjectNode) objectMapper.readTree(eventJson);
+        eventPayload.put("locationEvent", "Updated staging venue");
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/events/{eventId}", eventId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(eventPayload)))
+                .andExpect(status().isOk());
+
+        var afterEventSave = shirtInventoryRepository.findByEventIdAndTypeAndSize(eventId, "adult", "M").orElseThrow();
+        assertThat(afterEventSave.getQuantityAvailable()).isEqualTo(availableBefore);
+        assertThat(afterEventSave.getQuantitySold()).isEqualTo(soldBefore);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch("/api/events/{eventId}/inventory", eventId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(List.of(Map.of(
+                                "type", "adult",
+                                "size", "M",
+                                "quantityAvailable", availableBefore + 5)))))
+                .andExpect(status().isOk());
+
+        var afterInventorySave = shirtInventoryRepository.findByEventIdAndTypeAndSize(eventId, "adult", "M").orElseThrow();
+        assertThat(afterInventorySave.getQuantityAvailable()).isEqualTo(availableBefore + 5);
+        assertThat(afterInventorySave.getQuantitySold()).isEqualTo(soldBefore);
+    }
+
+    @Test
     void pickupLookupDoesNotCollectAndCollectRecordsTimestamp() throws Exception {
         Long eventId = eventRepository.findFirstByCurrentTrue().orElseThrow().getId();
         Long categoryId = categoryRepository.findByEvent(eventRepository.findFirstByCurrentTrue().orElseThrow()).get(0).getId();
@@ -630,7 +728,7 @@ class MvpApiIntegrationTest {
                                 "audience", "confirmed-participants",
                                 "subject", "Terry Fox Run update",
                                 "body", "See you at the run.",
-                                "sendPreview", true))))
+                                "deliveryMode", "preview"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sentStatus").value("PREVIEW_CREATED"));
         assertThat(localEmailService.sentEmails()).extracting(email -> email.template()).contains("email-campaign-preview");
@@ -640,10 +738,12 @@ class MvpApiIntegrationTest {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "packageName", "Bronze",
                                 "price", 50000,
+                                "totalShirts", 10,
                                 "shirtAllocationRulesJson", "{\"adult\":{\"M\":10}}",
                                 "active", true))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.packageName").value("Bronze"))
+                .andExpect(jsonPath("$.totalShirts").value(10))
                 .andReturn()
                 .getResponse()
                 .getContentAsString();

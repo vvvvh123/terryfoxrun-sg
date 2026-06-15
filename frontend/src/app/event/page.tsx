@@ -54,9 +54,6 @@ export default function EventPage() {
     <Stack spacing={3}>
       <Box>
         <Typography variant="h3">{title}</Typography>
-        <Typography color="text.secondary" sx={{ mt: 1, maxWidth: 860 }}>
-          Full run details, T-shirt collection information, FAQ, and registration links for this year&apos;s event.
-        </Typography>
       </Box>
       {error ? <Alert severity="warning">{error}</Alert> : null}
 
@@ -98,7 +95,7 @@ export default function EventPage() {
               {(categories.length ? categories : [{ id: 0, eventId: 0, name: "5K / 10K Fun Run", isActive: true }]).map((category) => (
                 <Box key={category.id} sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
                   <Typography fontWeight={800}>{category.name}</Typography>
-                  <Typography color="text.secondary">{category.description ?? "Participant category configured by admin."}</Typography>
+                  <Typography color="text.secondary">{category.description ?? "Participant category details will be shared here."}</Typography>
                 </Box>
               ))}
             </Stack>
@@ -107,18 +104,28 @@ export default function EventPage() {
       </Grid>
 
       <Paper sx={{ p: 3 }}>
-        <Grid container spacing={3} alignItems="center">
+        <Grid container spacing={3} alignItems="stretch">
           <Grid item xs={12} md={5}>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <EventImage src={details?.tshirtFrontImageUrl} alt="T-shirt front design" />
-              <EventImage src={details?.tshirtBackImageUrl} alt="T-shirt back design" />
-            </Stack>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={12}>
+                <EventImage src={details?.tshirtFrontImageUrl} alt="T-shirt front design" />
+              </Grid>
+              {details?.tshirtBackImageUrl ? (
+                <Grid item xs={12} sm={6} md={12}>
+                  <EventImage src={details?.tshirtBackImageUrl} alt="T-shirt back design" />
+                </Grid>
+              ) : null}
+            </Grid>
           </Grid>
-          <Grid item xs={12} md={7}>
-            <Typography variant="h4">{details?.tshirtTitle ?? `${event?.year ?? ""} Terry Fox Run T-Shirt`}</Typography>
-            <Typography sx={{ mt: 2, whiteSpace: "pre-line" }}>
-              {details?.tshirtDescription ?? "Limited-edition event T-shirt details will be confirmed by the committee."}
-            </Typography>
+          <Grid item xs={12} md={7} sx={{ minWidth: 0 }}>
+            <Stack spacing={2} sx={{ minWidth: 0 }}>
+              <Typography variant="h4" sx={{ overflowWrap: "anywhere" }}>
+                {details?.tshirtTitle ?? `${event?.year ?? ""} Terry Fox Run T-Shirt`}
+              </Typography>
+              <Typography sx={{ whiteSpace: "pre-line", overflowWrap: "anywhere" }}>
+                {details?.tshirtDescription ?? "Limited-edition event T-shirt details will be shared here."}
+              </Typography>
+            </Stack>
           </Grid>
         </Grid>
       </Paper>

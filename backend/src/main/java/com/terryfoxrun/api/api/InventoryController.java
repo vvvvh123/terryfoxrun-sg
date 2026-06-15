@@ -26,8 +26,9 @@ public class InventoryController {
 
     @GetMapping("/sold-daily")
     public ResponseEntity<Object> getDailySold(@PathVariable Long eventId,
-                                               @RequestParam(defaultValue = "ALL") String size) {
-        return ResponseEntity.ok(inventoryService.getDailySold(eventId, size));
+                                               @RequestParam(defaultValue = "ALL") String size,
+                                               @RequestParam(defaultValue = "ALL") String type) {
+        return ResponseEntity.ok(inventoryService.getDailySold(eventId, size, type));
     }
 
     @PatchMapping

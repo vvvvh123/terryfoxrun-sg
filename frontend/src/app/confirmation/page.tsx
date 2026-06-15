@@ -24,7 +24,7 @@ function ConfirmationContent() {
     }
     getRegistration(Number(id))
       .then(setRegistration)
-      .catch(() => setError("Could not load the registration confirmation. Please try again later."));
+      .catch(() => setError("We could not access this registration confirmation. Sign in with the account used for registration, or open My Events."));
   }, [searchParams]);
 
   const latestPayment = useMemo(() => registration?.paymentAttempts[0], [registration]);

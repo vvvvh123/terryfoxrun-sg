@@ -13,7 +13,11 @@ const event = {
   locationPickup: "Canadian International School",
   donationPresets: [25, 50, 100],
   shirtPrice: 3500,
-  shirtSizes: [{ type: "adult", size: "M", quantityAvailable: 100 }],
+  shirtSizes: [
+    { type: "adult", size: "M", quantityAvailable: 100 },
+    { type: "adult", size: "L", quantityAvailable: 80 },
+    { type: "kid", size: "S", quantityAvailable: 40 },
+  ],
   paymentInstructions: {
     payNowQrImageUrl: "/paynow-placeholder.svg",
     payNowInstruction: "Scan the PayNow QR code and enter your Terry Fox Run reference in the payment comments.",
@@ -120,7 +124,8 @@ const corporatePackage = {
   eventId: 1,
   packageName: "Bronze",
   price: 50000,
-  shirtAllocationRulesJson: "{\"adult\":{\"M\":10,\"L\":10}}",
+  totalShirts: 20,
+  shirtAllocationRulesJson: "{}",
   active: true,
 };
 
@@ -165,7 +170,7 @@ async function mockBackend(page: Page) {
     }),
   );
   await page.route("http://127.0.0.1:8080/api/events/1/inventory", (route) =>
-    route.fulfill({ json: [{ type: "adult", size: "M", quantityAvailable: 100 }] }),
+    route.fulfill({ json: event.shirtSizes }),
   );
   await page.route("http://127.0.0.1:8080/api/events/1/inventory/sold-daily**", (route) =>
     route.fulfill({ json: [{ date: "2026-05-17", size: "M", quantitySold: 3 }] }),
@@ -232,10 +237,13 @@ async function mockBackend(page: Page) {
       });
     }
     if (route.request().method() === "POST") {
-      return route.fulfill({ json: { id: 31, eventId: 1, audience: "confirmed-participants", subject: "Run update", body: "See you there.", sentStatus: "PREVIEW_CREATED" } });
+      return route.fulfill({ json: { id: 31, eventId: 1, audience: "confirmed-participants", subject: "Run update", body: "See you there.", sentStatus: "DRAFT" } });
     }
     return route.fulfill({ json: [] });
   });
+  await page.route("http://127.0.0.1:8080/api/admin/email/configuration", (route) =>
+    route.fulfill({ json: { smtpConfigured: true, message: "Live email sending is enabled." } }),
+  );
   await page.route("http://127.0.0.1:8080/api/events/1/corporate-packages**", (route) => {
     if (route.request().method() === "POST" || route.request().method() === "PATCH") {
       return route.fulfill({ json: corporatePackage });
@@ -442,7 +450,7 @@ test("public pages and mobile-first registration checkout flow", async ({ page }
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Terry Fox Run Singapore, 2026" })).toBeVisible();
   await expect(page.getByAltText("Terry Fox Run Singapore logo")).toBeVisible();
-  await expect(page.getByText("Mobile-first registration")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Current Event" })).toBeVisible();
   await page.goto("/terrys-story");
   await expect(page.getByRole("heading", { name: "One run inspired a movement." })).toBeVisible();
 
@@ -465,10 +473,10 @@ test("public pages and mobile-first registration checkout flow", async ({ page }
     await expect(registerNav).toHaveAttribute("aria-current", "page");
     await expect(registerNav).toHaveCSS("color", "rgb(201, 31, 46)");
   }
-  await expect(page.getByText("Review this year's run details before completing registration.")).toBeVisible();
+  await expect(page.getByText("Review the run details below before completing your registration.")).toBeVisible();
   await expect(page.getByText("Angsana Green, East Coast Park")).toBeVisible();
   await expect(page.getByText("2026 Terry Fox Run T-Shirt")).toBeVisible();
-  await expect(page.getByText("$35.00 each")).toBeVisible();
+  await expect(page.getByText("$35.00 each").first()).toBeVisible();
   await expect(page.getByText("Please collect your T-shirt during the published pickup window.")).toBeVisible();
   await expect(page.getByText("All net proceeds support cancer research in Singapore.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Size charts" })).toBeVisible();
@@ -480,16 +488,15 @@ test("public pages and mobile-first registration checkout flow", async ({ page }
   const payerBox = await page.getByRole("heading", { name: "Payer and primary participant" }).boundingBox();
   expect(overviewBox?.y ?? 0).toBeLessThan(shirtBox?.y ?? Number.POSITIVE_INFINITY);
   expect(shirtBox?.y ?? 0).toBeLessThan(payerBox?.y ?? Number.POSITIVE_INFINITY);
-  await expect(page.getByRole("button", { name: "$0" })).toBeVisible();
-  await page.getByRole("button", { name: "$0" }).click();
-  await expect(page.getByLabel("Custom donation")).toHaveValue("0");
+  await expect(page.getByRole("button", { name: "$20" })).toBeVisible();
+  await expect(page.getByLabel("Custom donation")).toHaveValue("20");
   await page.getByLabel("Custom donation").fill("50");
   await page.getByLabel("Name").first().fill("Alex Tan");
   await page.getByLabel("Email address").fill("alex@example.com");
   await page.getByLabel("NRIC / Passport / FIN").fill("S1234567A");
   await page.getByLabel("Blood type").fill("O+");
   await page.getByLabel("Address in Singapore").fill("1 Orchard Road, Singapore");
-  await page.getByLabel("Primary M quantity").fill("1");
+  await page.getByRole("button", { name: "Add shirt size" }).first().click();
   await page.getByLabel(/I have read and agree to the indemnity, PDPA consent, and refund\/cancellation terms/).check();
   await page.getByRole("button", { name: "Continue to payment" }).click();
 
@@ -560,12 +567,12 @@ test("dashboard and admin payment queue show payment status operations", async (
   await expect(page.getByText("Announcement created.")).toBeVisible();
   await page.getByLabel("Subject").fill("Run update");
   await page.getByLabel("Email body").fill("See you at the run.");
-  await page.getByRole("button", { name: "Save campaign" }).click();
-  await expect(page.getByText("Email campaign saved.")).toBeVisible();
+  await page.getByRole("button", { name: "Save draft" }).click();
+  await expect(page.getByText("Email draft saved.")).toBeVisible();
 
   await page.getByRole("tab", { name: "Corporate" }).click();
   await expect(page.locator('input[value="Bronze"]')).toBeVisible();
-  await expect(page.getByLabel("Bronze M quantity")).toHaveValue("10");
+  await expect(page.getByLabel("Total shirts")).toHaveValue("20");
   await expect(page.getByText("Acme Pte Ltd")).toBeVisible();
   await page.getByRole("button", { name: "Save corporate packages" }).click();
   await expect(page.getByText("Corporate packages saved.")).toBeVisible();

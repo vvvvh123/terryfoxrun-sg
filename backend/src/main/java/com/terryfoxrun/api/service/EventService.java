@@ -70,12 +70,11 @@ public class EventService {
     @Transactional
     public EventDto createOrUpdate(Long id, EventDto dto) {
         Event event = id == null ? new Event() : eventRepository.findById(id).orElse(new Event());
+        boolean isNewEvent = event.getId() == null;
         applyToEntity(dto, event);
         eventRepository.save(event);
 
-        // Replace shirt inventory for this event
-        shirtInventoryRepository.findByEvent(event).forEach(shirtInventoryRepository::delete);
-        if (dto.shirtSizes() != null) {
+        if (isNewEvent && dto.shirtSizes() != null) {
             for (EventDto.ShirtSizeDto s : dto.shirtSizes()) {
                 ShirtInventory inv = new ShirtInventory();
                 inv.setEvent(event);

@@ -41,23 +41,28 @@ public class InventoryService {
     @Transactional
     public void updateInventory(Long eventId, List<EventDto.ShirtSizeDto> items) {
         Event event = eventRepository.findById(eventId).orElseThrow();
-        shirtInventoryRepository.findByEvent(event).forEach(shirtInventoryRepository::delete);
         for (EventDto.ShirtSizeDto dto : items) {
-            ShirtInventory inv = new ShirtInventory();
-            inv.setEvent(event);
-            inv.setType(dto.type());
-            inv.setSize(dto.size());
+            ShirtInventory inv = shirtInventoryRepository
+                    .findByEventIdAndTypeAndSize(eventId, dto.type(), dto.size())
+                    .orElseGet(() -> {
+                        ShirtInventory created = new ShirtInventory();
+                        created.setEvent(event);
+                        created.setType(dto.type());
+                        created.setSize(dto.size());
+                        created.setQuantityReserved(0);
+                        created.setQuantitySold(0);
+                        return created;
+                    });
             inv.setQuantityAvailable(dto.quantityAvailable());
-            inv.setQuantityReserved(0);
-            inv.setQuantitySold(0);
             shirtInventoryRepository.save(inv);
         }
     }
 
     @Transactional(readOnly = true)
-    public List<DailyInventorySoldDto> getDailySold(Long eventId, String size) {
+    public List<DailyInventorySoldDto> getDailySold(Long eventId, String size, String type) {
         Event event = eventRepository.findById(eventId).orElseThrow();
         String normalizedSize = size == null || size.isBlank() ? "ALL" : size;
+        String normalizedType = type == null || type.isBlank() ? "ALL" : type;
         Map<String, Integer> totals = new TreeMap<>();
         for (InventoryMovement movement : inventoryMovementRepository.findByEventOrderByCreatedAtAsc(event)) {
             if (!"REGISTRATION_PAYMENT_CONFIRMED".equals(movement.getReason())
@@ -67,12 +72,25 @@ public class InventoryService {
             if (!"ALL".equalsIgnoreCase(normalizedSize) && !normalizedSize.equalsIgnoreCase(movement.getSize())) {
                 continue;
             }
+            if (!"ALL".equalsIgnoreCase(normalizedType) && !normalizedType.equalsIgnoreCase(movement.getShirtType())) {
+                continue;
+            }
             String day = movement.getCreatedAt().toLocalDate().toString();
             int sold = Math.abs(Math.min(0, movement.getQuantityDelta() == null ? 0 : movement.getQuantityDelta()));
             totals.merge(day, sold, Integer::sum);
         }
+        String label = "ALL".equalsIgnoreCase(normalizedSize) && "ALL".equalsIgnoreCase(normalizedType)
+                ? "ALL"
+                : ("ALL".equalsIgnoreCase(normalizedType)
+                ? normalizedSize.toUpperCase()
+                : capitalize(normalizedType) + ("ALL".equalsIgnoreCase(normalizedSize) ? "" : " " + normalizedSize.toUpperCase()));
         return totals.entrySet().stream()
-                .map(entry -> new DailyInventorySoldDto(entry.getKey(), normalizedSize.toUpperCase(), entry.getValue()))
+                .map(entry -> new DailyInventorySoldDto(entry.getKey(), label, entry.getValue()))
                 .toList();
+    }
+
+    private String capitalize(String value) {
+        if (value == null || value.isBlank()) return value;
+        return value.substring(0, 1).toUpperCase() + value.substring(1).toLowerCase();
     }
 }

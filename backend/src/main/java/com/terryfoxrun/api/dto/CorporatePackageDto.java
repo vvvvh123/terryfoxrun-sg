@@ -5,6 +5,7 @@ public record CorporatePackageDto(
         Long eventId,
         String packageName,
         Integer price,
+        Integer totalShirts,
         String shirtAllocationRulesJson,
         boolean active
 ) {

@@ -13,10 +13,16 @@ import com.terryfoxrun.api.repo.EventRepository;
 import com.terryfoxrun.api.repo.RegistrationRepository;
 import com.terryfoxrun.api.service.email.EmailService;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 @Service
 public class EmailCampaignService {
@@ -68,14 +74,63 @@ public class EmailCampaignService {
         campaign.setBody(request.body());
         campaign.setCreatedBy(createdBy);
         campaign.setCreatedAt(LocalDateTime.now());
-        if (request.sendPreview()) {
+        String deliveryMode = normalizeDeliveryMode(request.deliveryMode());
+        if ("preview".equals(deliveryMode)) {
             campaign.setSentStatus("PREVIEW_CREATED");
             campaign.setSentAt(LocalDateTime.now());
             emailService.sendCampaignPreview(request.audience(), request.subject(), request.body());
+        } else if ("send".equals(deliveryMode)) {
+            if (!emailService.isLiveDeliveryAvailable()) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Live email sending is not configured yet. Save a draft or send a preview instead.");
+            }
+            Set<String> recipients = resolveRecipients(event, request.audience());
+            recipients.forEach(email -> emailService.sendCampaignEmail(email, request.subject(), request.body()));
+            campaign.setSentStatus("SENT");
+            campaign.setSentAt(LocalDateTime.now());
         } else {
             campaign.setSentStatus("DRAFT");
         }
         return toDto(emailCampaignRepository.save(campaign));
+    }
+
+    private String normalizeDeliveryMode(String deliveryMode) {
+        String normalized = deliveryMode == null ? "" : deliveryMode.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "draft", "preview", "send" -> normalized;
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported email delivery mode.");
+        };
+    }
+
+    private Set<String> resolveRecipients(Event event, String audience) {
+        return switch (audience) {
+            case "all-participants" -> registrationRepository.findByEvent(event).stream()
+                    .map(Registration::getPayerEmail)
+                    .filter(StringUtils::hasText)
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            case "confirmed-participants" -> registrationRepository.findByEvent(event).stream()
+                    .filter(registration -> "CONFIRMED".equals(registration.getPaymentStatus()))
+                    .map(Registration::getPayerEmail)
+                    .filter(StringUtils::hasText)
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            case "pending-payment" -> registrationRepository.findByEvent(event).stream()
+                    .filter(registration -> "PENDING_ADMIN_VERIFICATION".equals(registration.getPaymentStatus()))
+                    .map(Registration::getPayerEmail)
+                    .filter(StringUtils::hasText)
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            case "payment-rejected" -> registrationRepository.findByEvent(event).stream()
+                    .filter(registration -> "PAYMENT_REJECTED".equals(registration.getPaymentStatus()))
+                    .map(Registration::getPayerEmail)
+                    .filter(StringUtils::hasText)
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            case "corporate-contacts" -> corporateOrderRepository.findByEvent(event).stream()
+                    .map(CorporateOrder::getContactEmail)
+                    .filter(StringUtils::hasText)
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+            case "test-preview" -> Set.of();
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unknown audience segment.");
+        };
     }
 
     private EmailCampaignDto toDto(EmailCampaign campaign) {

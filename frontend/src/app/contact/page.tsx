@@ -45,7 +45,7 @@ export default function ContactPage() {
       <Box>
         <Typography variant="h3">Contact Us</Typography>
         <Typography color="text.secondary" sx={{ mt: 1, maxWidth: 720 }}>
-          Send a question to the Terry Fox Run Singapore committee. The admin portal controls which email address receives these messages.
+          Send a question to the Terry Fox Run Singapore committee and we&apos;ll get back to you as soon as we can.
         </Typography>
       </Box>
       {status ? <Alert severity="success">{status}</Alert> : null}

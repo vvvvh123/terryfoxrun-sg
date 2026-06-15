@@ -10,12 +10,15 @@ import com.terryfoxrun.api.repo.CorporateOrderItemRepository;
 import com.terryfoxrun.api.repo.CorporateOrderRepository;
 import com.terryfoxrun.api.repo.CorporatePackageRepository;
 import com.terryfoxrun.api.repo.EventRepository;
+import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import org.springframework.http.HttpStatus;
 
 @Service
 public class CorporateOrderService {
@@ -38,6 +41,28 @@ public class CorporateOrderService {
     @Transactional
     public CorporateOrder create(CorporateOrderRequest request) {
         Event event = eventRepository.findById(request.eventId()).orElseThrow();
+        CorporatePackage corporatePackage = null;
+        if (request.corporatePackageId() != null) {
+            corporatePackage = corporatePackageRepository.findById(request.corporatePackageId()).orElseThrow();
+            int requestedTotal = request.items().stream()
+                    .map(CorporateOrderRequest.Item::quantity)
+                    .map(quantity -> quantity == null ? 0 : quantity)
+                    .reduce(0, Integer::sum);
+            int packageTotal = corporatePackage.getTotalShirts() == null ? 0 : corporatePackage.getTotalShirts();
+            if (requestedTotal != packageTotal) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Selected shirt quantities must add up to the package total of " + packageTotal + ".");
+            }
+        }
+        for (CorporateOrderRequest.Item item : request.items()) {
+            if (item.quantity() == null || item.quantity() < 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Corporate shirt quantities cannot be negative.");
+            }
+            if (item.type() == null || item.type().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Each corporate shirt allocation needs a shirt type.");
+            }
+        }
         CorporateOrder order = new CorporateOrder();
         order.setEvent(event);
         order.setCompanyName(request.companyName());
@@ -46,8 +71,8 @@ public class CorporateOrderService {
         order.setContactName(request.contactName());
         order.setContactEmail(request.contactEmail());
         order.setContactPhone(request.contactPhone());
-        if (request.corporatePackageId() != null) {
-            order.setCorporatePackage(corporatePackageRepository.findById(request.corporatePackageId()).orElseThrow());
+        if (corporatePackage != null) {
+            order.setCorporatePackage(corporatePackage);
         }
         order.setStatus("pending");
         order.setCreatedAt(LocalDateTime.now());
@@ -57,7 +82,7 @@ public class CorporateOrderService {
             CorporateOrderItem it = new CorporateOrderItem();
             it.setCorporateOrder(order);
             it.setSize(item.size());
-            it.setType(item.type());
+            it.setType(item.type().toLowerCase(Locale.ROOT));
             it.setQuantity(item.quantity());
             corporateOrderItemRepository.save(it);
         }

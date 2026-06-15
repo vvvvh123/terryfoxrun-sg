@@ -14,4 +14,8 @@ public interface EmailService {
     void sendAnnouncementEmail(String recipientEmail, String subject, String body);
 
     void sendCampaignPreview(String audience, String subject, String body);
+
+    void sendCampaignEmail(String recipientEmail, String subject, String body);
+
+    boolean isLiveDeliveryAvailable();
 }

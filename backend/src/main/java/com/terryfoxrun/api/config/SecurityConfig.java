@@ -42,6 +42,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/events/current", "/api/events/*", "/api/events/*/categories").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/events/*/slideshow", "/api/events/*/form-fields", "/api/events/*/announcements", "/api/events/*/corporate-packages").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/events/*/contact-submissions").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/corporate-orders").permitAll()
                         .requestMatchers("/api/registrations/quote").permitAll()
                         .requestMatchers("/api/registrations/me").hasAnyRole("PARTICIPANT", "ADMIN")
                         .requestMatchers("/api/pickup/**").hasAnyRole("VOLUNTEER", "ADMIN")

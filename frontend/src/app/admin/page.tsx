@@ -34,6 +34,7 @@ import {
   EmailAudienceSegment,
   EventStats,
   EventDto,
+  EmailDeliveryConfig,
   FormFieldConfig,
   PaymentAttempt,
   PickupResult,
@@ -59,6 +60,7 @@ import {
   getCorporatePackages,
   getCurrentEvent,
   getDailySold,
+  getEmailDeliveryConfig,
   getEmailCampaigns,
   getEmailAudiences,
   getEvents,
@@ -74,11 +76,13 @@ import {
   saveFormFields,
   saveSlideshow,
   setCurrentEvent,
+  SITE_MEDIA_BUCKET,
   updateCategory,
   updateCorporateOrderStatus,
   updateCorporatePackage,
   updateEvent,
   updateInventory,
+  uploadSiteMedia,
 } from "@/lib/api";
 import { useAuth } from "@/components/AuthProvider";
 import { defaultFormFields } from "@/lib/registrationFields";
@@ -98,20 +102,14 @@ function fromDateTimeInput(value: string) {
   return value ? new Date(value).toISOString() : undefined;
 }
 
-const packageSizes = ["XS", "S", "M", "L", "XL", "XXL"];
-
-function parsePackageQuantities(json?: string) {
-  try {
-    const parsed = JSON.parse(json || "{}") as Record<string, Record<string, number>>;
-    return parsed.adult ?? {};
-  } catch {
-    return {};
-  }
+function displayIntegerInput(value?: number) {
+  if (!value) return "";
+  return String(value);
 }
 
-function toPackageRulesJson(quantities: Record<string, number>) {
-  const active = Object.fromEntries(Object.entries(quantities).filter(([, quantity]) => Number(quantity || 0) > 0));
-  return JSON.stringify({ adult: active });
+function displayMoneyInput(cents?: number) {
+  if (!cents) return "";
+  return (cents / 100).toString();
 }
 
 export default function AdminPage() {
@@ -126,6 +124,7 @@ export default function AdminPage() {
   const [inventory, setInventory] = useState<ShirtInventoryItem[]>([]);
   const [soldDaily, setSoldDaily] = useState<DailyInventorySold[]>([]);
   const [soldSize, setSoldSize] = useState("ALL");
+  const [soldType, setSoldType] = useState("ALL");
   const [slides, setSlides] = useState<SlideshowImage[]>([]);
   const [formFields, setFormFields] = useState<FormFieldConfig[]>(defaultFormFields);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -136,17 +135,24 @@ export default function AdminPage() {
   const [pickupSummary, setPickupSummary] = useState<PickupSummary | null>(null);
   const [pickupHistory, setPickupHistory] = useState<PickupResult[]>([]);
   const [roleUsers, setRoleUsers] = useState<RoleUsersResponse | null>(null);
+  const [emailDeliveryConfig, setEmailDeliveryConfig] = useState<EmailDeliveryConfig | null>(null);
   const [eventStats, setEventStats] = useState<EventStats | null>(null);
   const [registrationReport, setRegistrationReport] = useState<AdminRegistrationReport | null>(null);
   const [registrationSearch, setRegistrationSearch] = useState("");
   const [registrationPaymentFilter, setRegistrationPaymentFilter] = useState("");
   const [pickupSearch, setPickupSearch] = useState("");
+  const [uploadingSlideIndex, setUploadingSlideIndex] = useState<number | null>(null);
   const [statusFilter, setStatusFilter] = useState("PENDING_ADMIN_VERIFICATION");
   const [methodFilter, setMethodFilter] = useState<"PAYNOW" | "BANK_TRANSFER" | "">("");
   const [adminTransactionIds, setAdminTransactionIds] = useState<Record<number, string>>({});
   const [rejectionReasons, setRejectionReasons] = useState<Record<number, string>>({});
   const [announcementDraft, setAnnouncementDraft] = useState({ title: "", body: "", channelDashboard: true, channelEmail: false });
-  const [campaignDraft, setCampaignDraft] = useState({ audience: "confirmed-participants", subject: "", body: "", sendPreview: true });
+  const [campaignDraft, setCampaignDraft] = useState<{ audience: string; subject: string; body: string; deliveryMode: "draft" | "preview" | "send" }>({
+    audience: "confirmed-participants",
+    subject: "",
+    body: "",
+    deliveryMode: "draft",
+  });
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -183,8 +189,8 @@ export default function AdminPage() {
     setPickupHistory(loadedPickupHistory);
     setEventStats(loadedStats);
     setRegistrationReport(loadedRegistrationReport);
-    setSoldDaily(await getDailySold(targetEvent.id, soldSize));
-  }, [methodFilter, pickupSearch, registrationPaymentFilter, registrationSearch, soldSize, statusFilter]);
+    setSoldDaily(await getDailySold(targetEvent.id, soldSize, soldType));
+  }, [methodFilter, pickupSearch, registrationPaymentFilter, registrationSearch, soldSize, soldType, statusFilter]);
 
   const loadAdmin = useCallback(async (preferredEventId?: number | null) => {
     const loadedEvents = await getEvents();
@@ -237,6 +243,16 @@ export default function AdminPage() {
     }));
   }, [appRole, loading, user]);
 
+  useEffect(() => {
+    if (loading || !user || appRole !== "admin") return;
+    getEmailDeliveryConfig()
+      .then(setEmailDeliveryConfig)
+      .catch(() => setEmailDeliveryConfig({
+        smtpConfigured: false,
+        message: "Could not confirm live email delivery settings.",
+      }));
+  }, [appRole, loading, user]);
+
   const metrics = useMemo(() => {
     const remaining = inventory.reduce((sum, item) => sum + Number(item.quantityAvailable || 0), 0);
     const confirmed = payments.filter((payment) => payment.verificationStatus === "CONFIRMED").length;
@@ -250,6 +266,12 @@ export default function AdminPage() {
       { label: "Active slides", value: slides.filter((slide) => slide.active).length, help: "Slideshow images currently enabled for the selected event homepage." },
     ];
   }, [eventStats, inventory, payments, pickupSummary, slides]);
+
+  const inventorySizes = useMemo(() => Array.from(new Set(inventory.map((item) => item.size))), [inventory]);
+  const stockBySizeData = useMemo(
+    () => inventory.map((item) => ({ label: `${item.type === "kid" ? "Kids" : "Adult"} ${item.size}`, quantityAvailable: item.quantityAvailable })),
+    [inventory],
+  );
 
   function patchEvent(patch: Partial<EventDto>) {
     setEventDraft((current) => (current ? { ...current, ...patch } : current));
@@ -315,17 +337,6 @@ export default function AdminPage() {
 
   function updateCorporatePackageDraft(index: number, patch: Partial<CorporatePackage>) {
     setCorporatePackages((current) => current.map((pkg, currentIndex) => (currentIndex === index ? { ...pkg, ...patch } : pkg)));
-  }
-
-  function updateCorporatePackageQuantity(index: number, size: string, quantity: number) {
-    setCorporatePackages((current) =>
-      current.map((pkg, currentIndex) => {
-        if (currentIndex !== index) return pkg;
-        const quantities = parsePackageQuantities(pkg.shirtAllocationRulesJson);
-        quantities[size] = Math.max(0, quantity);
-        return { ...pkg, shirtAllocationRulesJson: toPackageRulesJson(quantities) };
-      }),
-    );
   }
 
   async function handleCreateEvent() {
@@ -480,6 +491,13 @@ export default function AdminPage() {
   async function handleCreateAnnouncement() {
     if (!event) return;
     setError("");
+    const announcementAudienceCount = emailAudiences.find((audience) => audience.key === "all-participants")?.count ?? 0;
+    if (announcementDraft.channelEmail) {
+      const confirmed = window.confirm(
+        `Email this announcement to ${announcementAudienceCount} registered participant${announcementAudienceCount === 1 ? "" : "s"}?`,
+      );
+      if (!confirmed) return;
+    }
     try {
       await createAnnouncement(event.id, announcementDraft);
       setAnnouncementDraft({ title: "", body: "", channelDashboard: true, channelEmail: false });
@@ -490,13 +508,24 @@ export default function AdminPage() {
     }
   }
 
-  async function handleCreateCampaign() {
+  async function handleCreateCampaign(deliveryMode: "draft" | "preview" | "send") {
     if (!event) return;
     setError("");
+    const audience = emailAudiences.find((candidate) => candidate.key === campaignDraft.audience);
+    if (deliveryMode === "send" && !emailDeliveryConfig?.smtpConfigured) {
+      setError(emailDeliveryConfig?.message || "Live email sending is not configured yet.");
+      return;
+    }
+    if (deliveryMode === "send") {
+      const confirmed = window.confirm(
+        `Send this email to ${audience?.count ?? 0} recipient${audience?.count === 1 ? "" : "s"} in ${audience?.label ?? "the selected audience"}?`,
+      );
+      if (!confirmed) return;
+    }
     try {
-      await createEmailCampaign(event.id, campaignDraft);
-      setCampaignDraft({ audience: "confirmed-participants", subject: "", body: "", sendPreview: true });
-      setMessage("Email campaign saved.");
+      await createEmailCampaign(event.id, { ...campaignDraft, deliveryMode });
+      setCampaignDraft({ audience: "confirmed-participants", subject: "", body: "", deliveryMode: "draft" });
+      setMessage(deliveryMode === "send" ? "Email sent." : deliveryMode === "preview" ? "Email preview created." : "Email draft saved.");
       await loadAdmin(event.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create email campaign.");
@@ -595,6 +624,29 @@ export default function AdminPage() {
 
   function updateSlide(index: number, patch: Partial<SlideshowImage>) {
     setSlides((current) => current.map((slide, currentIndex) => (currentIndex === index ? { ...slide, ...patch } : slide)));
+  }
+
+  async function handleSlideImageUpload(index: number, file: File | null) {
+    if (!event || !file) return;
+    setError("");
+    setUploadingSlideIndex(index);
+    try {
+      const imageUrl = await uploadSiteMedia({
+        file,
+        eventId: event.id,
+        folder: "slideshow",
+      });
+      updateSlide(index, { imageUrl });
+      setMessage("Slideshow image uploaded. Save the slideshow to publish the change.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? `${err.message} Make sure the ${SITE_MEDIA_BUCKET} bucket exists and is public.`
+          : "Could not upload slideshow image.",
+      );
+    } finally {
+      setUploadingSlideIndex(null);
+    }
   }
 
   function updateField(index: number, patch: Partial<FormFieldConfig>) {
@@ -916,8 +968,13 @@ export default function AdminPage() {
                 <TextField fullWidth multiline minRows={4} label="Body" value={announcementDraft.body} onChange={(e) => setAnnouncementDraft({ ...announcementDraft, body: e.target.value })} />
                 <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
                   <FormControlLabel control={<Switch checked={announcementDraft.channelDashboard} onChange={(e) => setAnnouncementDraft({ ...announcementDraft, channelDashboard: e.target.checked })} />} label="Show in dashboard" />
-                  <FormControlLabel control={<Switch checked={announcementDraft.channelEmail} onChange={(e) => setAnnouncementDraft({ ...announcementDraft, channelEmail: e.target.checked })} />} label="Mark for email" />
+                  <FormControlLabel control={<Switch checked={announcementDraft.channelEmail} onChange={(e) => setAnnouncementDraft({ ...announcementDraft, channelEmail: e.target.checked })} />} label="Email participants" />
                 </Stack>
+                {announcementDraft.channelEmail ? (
+                  <Alert severity="info">
+                    This will email {emailAudiences.find((audience) => audience.key === "all-participants")?.count ?? 0} registered participant(s) after confirmation.
+                  </Alert>
+                ) : null}
                 <Button variant="contained" sx={{ alignSelf: "flex-start" }} onClick={handleCreateAnnouncement}>
                   Create announcement
                 </Button>
@@ -927,6 +984,11 @@ export default function AdminPage() {
               <Stack spacing={2}>
                 <Typography variant="h5">Mass email</Typography>
                 <Typography color="text.secondary">Choose a fixed audience segment for the selected event.</Typography>
+                {emailDeliveryConfig ? (
+                  <Alert severity={emailDeliveryConfig.smtpConfigured ? "success" : "info"}>
+                    {emailDeliveryConfig.message}
+                  </Alert>
+                ) : null}
                 <Stack spacing={1} sx={{ maxHeight: 260, overflowY: "auto", pr: 0.5 }}>
                   {emailAudiences.map((audience) => (
                     <Box
@@ -956,10 +1018,20 @@ export default function AdminPage() {
                 </Stack>
                 <TextField fullWidth label="Subject" value={campaignDraft.subject} onChange={(e) => setCampaignDraft({ ...campaignDraft, subject: e.target.value })} />
                 <TextField fullWidth multiline minRows={4} label="Email body" value={campaignDraft.body} onChange={(e) => setCampaignDraft({ ...campaignDraft, body: e.target.value })} />
-                <FormControlLabel control={<Switch checked={campaignDraft.sendPreview} onChange={(e) => setCampaignDraft({ ...campaignDraft, sendPreview: e.target.checked })} />} label="Create email preview" />
-                <Button variant="contained" sx={{ alignSelf: "flex-start" }} onClick={handleCreateCampaign}>
-                  Save campaign
-                </Button>
+                <Typography variant="body2" color="text.secondary">
+                  Audience count: {emailAudiences.find((audience) => audience.key === campaignDraft.audience)?.count ?? 0}
+                </Typography>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                  <Button variant="outlined" onClick={() => handleCreateCampaign("draft")}>
+                    Save draft
+                  </Button>
+                  <Button variant="outlined" onClick={() => handleCreateCampaign("preview")}>
+                    Send preview
+                  </Button>
+                  <Button variant="contained" disabled={!emailDeliveryConfig?.smtpConfigured} onClick={() => handleCreateCampaign("send")}>
+                    Send email
+                  </Button>
+                </Stack>
               </Stack>
             </Grid>
             <Grid item xs={12} md={6}>
@@ -998,9 +1070,9 @@ export default function AdminPage() {
             <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between">
               <Box>
                 <Typography variant="h5">Corporate packages</Typography>
-                <Typography color="text.secondary">Configure packages and review submitted corporate shirt orders.</Typography>
+                <Typography color="text.secondary">Configure the package name, price, total shirts, and active status.</Typography>
               </Box>
-              <Button variant="outlined" onClick={() => setCorporatePackages([...corporatePackages, { packageName: "", price: 0, shirtAllocationRulesJson: toPackageRulesJson({}), active: true }])}>
+              <Button variant="outlined" onClick={() => setCorporatePackages([...corporatePackages, { packageName: "", price: 0, totalShirts: 0, shirtAllocationRulesJson: "{}", active: true }])}>
                 Add package
               </Button>
             </Stack>
@@ -1009,31 +1081,21 @@ export default function AdminPage() {
                 <Grid item xs={12} md={6} key={pkg.id ?? index}>
                   <Box sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
                     <Grid container spacing={1.5}>
-                      <Grid item xs={12} md={7}>
+                      <Grid item xs={12} md={6}>
                         <TextField fullWidth label="Package name" value={pkg.packageName} onChange={(e) => updateCorporatePackageDraft(index, { packageName: e.target.value })} />
                       </Grid>
-                      <Grid item xs={12} md={5}>
-                        <TextField fullWidth type="number" label="Price (SGD)" value={(pkg.price ?? 0) / 100} onChange={(e) => updateCorporatePackageDraft(index, { price: Math.round(Number(e.target.value || 0) * 100) })} />
+                      <Grid item xs={12} md={3}>
+                        <TextField fullWidth type="number" label="Price (SGD)" value={displayMoneyInput(pkg.price)} onChange={(e) => updateCorporatePackageDraft(index, { price: Math.round(Number(e.target.value || 0) * 100) })} />
                       </Grid>
-                      <Grid item xs={12}>
-                        <Typography fontWeight={800} sx={{ mb: 1 }}>T-shirt allocation</Typography>
-                        <Grid container spacing={1}>
-                          {packageSizes.map((size) => {
-                            const quantities = parsePackageQuantities(pkg.shirtAllocationRulesJson);
-                            return (
-                              <Grid item xs={6} sm={4} md={2} key={size}>
-                                <TextField
-                                  fullWidth
-                                  type="number"
-                                  label={size}
-                                  value={quantities[size] ?? 0}
-                                  inputProps={{ min: 0, "aria-label": `${pkg.packageName || "Corporate package"} ${size} quantity` }}
-                                  onChange={(e) => updateCorporatePackageQuantity(index, size, Number(e.target.value))}
-                                />
-                              </Grid>
-                            );
-                          })}
-                        </Grid>
+                      <Grid item xs={12} md={3}>
+                        <TextField
+                          fullWidth
+                          type="number"
+                          label="Total shirts"
+                          value={displayIntegerInput(pkg.totalShirts)}
+                          inputProps={{ min: 0 }}
+                          onChange={(e) => updateCorporatePackageDraft(index, { totalShirts: Math.max(0, Number(e.target.value)) })}
+                        />
                       </Grid>
                       <Grid item xs={12}>
                         <FormControlLabel control={<Switch checked={pkg.active} onChange={(e) => updateCorporatePackageDraft(index, { active: e.target.checked })} />} label="Active" />
@@ -1090,7 +1152,7 @@ export default function AdminPage() {
                 <TextField fullWidth label="Event name" value={eventDraft.name} onChange={(e) => patchEvent({ name: e.target.value })} />
               </Grid>
               <Grid item xs={12} md={3}>
-                <TextField fullWidth type="number" label="Year" value={eventDraft.year} onChange={(e) => patchEvent({ year: Number(e.target.value) })} />
+                <TextField fullWidth type="number" label="Year" value={displayIntegerInput(eventDraft.year)} onChange={(e) => patchEvent({ year: Number(e.target.value || 0) })} />
               </Grid>
               <Grid item xs={12} md={3}>
                 <TextField fullWidth label="Status" value={eventDraft.status} onChange={(e) => patchEvent({ status: e.target.value })} />
@@ -1100,7 +1162,7 @@ export default function AdminPage() {
                   fullWidth
                   type="number"
                   label="T-shirt price (SGD)"
-                  value={((eventDraft.shirtPrice ?? 0) / 100).toString()}
+                  value={displayMoneyInput(eventDraft.shirtPrice)}
                   inputProps={{ min: 0, step: "0.01" }}
                   helperText="Used for individual registration checkout totals."
                   onChange={(e) => patchEvent({ shirtPrice: Math.round(Number(e.target.value || 0) * 100) })}
@@ -1188,7 +1250,7 @@ export default function AdminPage() {
                       <TextField fullWidth multiline minRows={2} label="Answer" value={faq.answer} onChange={(e) => updateFaq(index, { answer: e.target.value })} />
                     </Grid>
                     <Grid item xs={6} md={1}>
-                      <TextField fullWidth type="number" label="Order" value={faq.displayOrder} onChange={(e) => updateFaq(index, { displayOrder: Number(e.target.value) })} />
+                      <TextField fullWidth type="number" label="Order" value={displayIntegerInput(faq.displayOrder)} onChange={(e) => updateFaq(index, { displayOrder: Number(e.target.value || 0) })} />
                     </Grid>
                     <Grid item xs={6} md={1}>
                       <Stack spacing={1}>
@@ -1283,7 +1345,7 @@ export default function AdminPage() {
                           <TextField fullWidth label="Category name" value={category.name} onChange={(e) => updateCategoryDraft(index, { name: e.target.value })} />
                         </Grid>
                         <Grid item xs={12} md={6}>
-                          <TextField fullWidth type="number" label="Base price (SGD)" value={(category.basePrice ?? 0) / 100} onChange={(e) => updateCategoryDraft(index, { basePrice: Math.round(Number(e.target.value || 0) * 100) })} />
+                          <TextField fullWidth type="number" label="Base price (SGD)" value={displayMoneyInput(category.basePrice)} onChange={(e) => updateCategoryDraft(index, { basePrice: Math.round(Number(e.target.value || 0) * 100) })} />
                         </Grid>
                         <Grid item xs={12}>
                           <TextField fullWidth label="Description" value={category.description ?? ""} onChange={(e) => updateCategoryDraft(index, { description: e.target.value })} />
@@ -1371,7 +1433,7 @@ export default function AdminPage() {
                           fullWidth
                           type="number"
                           label="Stock available"
-                          value={item.quantityAvailable}
+                          value={displayIntegerInput(item.quantityAvailable)}
                           inputProps={{ min: 0 }}
                           sx={{ mt: 1 }}
                           onChange={(e) => updateInventoryItem(index, { quantityAvailable: Math.max(0, Number(e.target.value)) })}
@@ -1390,9 +1452,9 @@ export default function AdminPage() {
                 <Box sx={{ height: 280 }}>
                   <Typography fontWeight={800} sx={{ mb: 1 }}>Stock remaining</Typography>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={inventory}>
+                    <BarChart data={stockBySizeData}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="size" />
+                      <XAxis dataKey="label" />
                       <YAxis />
                       <RechartsTooltip />
                       <Bar dataKey="quantityAvailable" fill="#c91f2e" />
@@ -1402,14 +1464,24 @@ export default function AdminPage() {
                 <Box sx={{ height: 300 }}>
                   <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="space-between" alignItems={{ sm: "center" }} sx={{ mb: 1 }}>
                     <Typography fontWeight={800}>Sold per day</Typography>
-                    <FormControl size="small" sx={{ minWidth: 160 }}>
-                      <InputLabel>Size</InputLabel>
-                      <Select label="Size" value={soldSize} onChange={(e) => setSoldSize(e.target.value)}>
-                        {["ALL", ...Array.from(new Set(inventory.map((item) => item.size))).filter(Boolean)].map((size) => (
-                          <MenuItem key={size} value={size}>{size === "ALL" ? "All sizes" : size}</MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                      <FormControl size="small" sx={{ minWidth: 160 }}>
+                        <InputLabel>Type</InputLabel>
+                        <Select label="Type" value={soldType} onChange={(e) => setSoldType(e.target.value)}>
+                          <MenuItem value="ALL">All types</MenuItem>
+                          <MenuItem value="adult">Adult</MenuItem>
+                          <MenuItem value="kid">Kids</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <FormControl size="small" sx={{ minWidth: 160 }}>
+                        <InputLabel>Size</InputLabel>
+                        <Select label="Size" value={soldSize} onChange={(e) => setSoldSize(e.target.value)}>
+                          {["ALL", ...inventorySizes.filter(Boolean)].map((size) => (
+                            <MenuItem key={size} value={size}>{size === "ALL" ? "All sizes" : size}</MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+                    </Stack>
                   </Stack>
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={soldDaily}>
@@ -1474,7 +1546,7 @@ export default function AdminPage() {
             <Stack direction={{ xs: "column", md: "row" }} spacing={2} justifyContent="space-between">
               <Box>
                 <Typography variant="h5">Homepage slideshow</Typography>
-                <Typography color="text.secondary">Configure Terry Fox and past-run images plus short blurbs.</Typography>
+                <Typography color="text.secondary">Upload images or paste a direct image URL, then add a short blurb for each slide.</Typography>
               </Box>
               <Button variant="outlined" onClick={() => setSlides([...slides, { imageUrl: "", blurb: "", displayOrder: slides.length + 1, active: true }])}>
                 Add image
@@ -1484,6 +1556,40 @@ export default function AdminPage() {
               {slides.map((slide, index) => (
                 <Grid item xs={12} md={6} key={index}>
                   <Box sx={{ p: 2, border: "1px solid #e2e6ef", borderRadius: 2 }}>
+                    {slide.imageUrl ? (
+                      <Box
+                        component="img"
+                        src={slide.imageUrl}
+                        alt={`Slideshow preview ${index + 1}`}
+                        sx={{
+                          width: "100%",
+                          height: 180,
+                          objectFit: "cover",
+                          borderRadius: 2,
+                          border: "1px solid #e2e6ef",
+                          bgcolor: "#f6f7fb",
+                          mb: 2,
+                        }}
+                      />
+                    ) : null}
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mb: 2 }}>
+                      <Button component="label" variant="outlined" disabled={uploadingSlideIndex === index}>
+                        {uploadingSlideIndex === index ? "Uploading..." : "Upload image"}
+                        <input
+                          hidden
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/gif"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null;
+                            handleSlideImageUpload(index, file);
+                            e.currentTarget.value = "";
+                          }}
+                        />
+                      </Button>
+                      <Typography color="text.secondary" variant="body2" sx={{ alignSelf: "center" }}>
+                        Manual URL still works if you prefer to paste one.
+                      </Typography>
+                    </Stack>
                     <TextField fullWidth label="Image URL" value={slide.imageUrl} onChange={(e) => updateSlide(index, { imageUrl: e.target.value })} />
                     <TextField
                       fullWidth

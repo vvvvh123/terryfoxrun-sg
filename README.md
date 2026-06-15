@@ -50,6 +50,9 @@ npm run dev
 The frontend runs at `http://127.0.0.1:3000` and calls the backend configured by
 `NEXT_PUBLIC_API_BASE_URL`.
 
+For admin uploads to the homepage slideshow, configure a public Supabase Storage bucket and set
+`NEXT_PUBLIC_SITE_MEDIA_BUCKET` in the frontend environment. The default bucket name is `site-media`.
+
 Build the frontend:
 
 ```bash

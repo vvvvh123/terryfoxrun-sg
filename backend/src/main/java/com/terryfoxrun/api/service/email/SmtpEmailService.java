@@ -77,6 +77,16 @@ public class SmtpEmailService implements EmailService {
         deliver(preview, previewRecipient);
     }
 
+    @Override
+    public void sendCampaignEmail(String recipientEmail, String subject, String body) {
+        deliver(LocalEmailService.campaignEmail(recipientEmail, subject, body), recipientEmail);
+    }
+
+    @Override
+    public boolean isLiveDeliveryAvailable() {
+        return isSmtpReady();
+    }
+
     private void deliver(EmailPreview preview) {
         deliver(preview, preview.to());
     }

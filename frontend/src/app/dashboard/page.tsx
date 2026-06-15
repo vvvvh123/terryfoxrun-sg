@@ -74,16 +74,13 @@ function DashboardContent() {
         setEventDetails(Object.fromEntries(eventEntries));
         setAnnouncements((await Promise.all(uniqueEventIds.map((eventId) => getAnnouncements(eventId, true)))).flat());
       })
-      .catch(() => setError("No registration is available yet. Complete a registration first, or try again later."));
+      .catch(() => setError("We could not access that registration. Sign in with the account used for registration, or choose another event from My Events."));
   }, [loading, searchParams, user]);
 
   return (
     <Stack spacing={3}>
       <Box>
         <Typography variant="h3">My Events</Typography>
-        <Typography color="text.secondary" sx={{ mt: 1 }}>
-          Participant dashboard for payment status, event reminders, receipts, and pickup code access.
-        </Typography>
       </Box>
       {!loading && !user ? (
         <Alert

@@ -41,8 +41,12 @@ public class RegistrationController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<RegistrationDetailDto> getRegistration(@PathVariable Long id) {
-        return registrationService.getRegistrationDetail(id)
+    public ResponseEntity<RegistrationDetailDto> getRegistration(@PathVariable Long id,
+                                                                 Authentication authentication) {
+        String payer = authentication != null ? authentication.getName() : "anonymous";
+        boolean admin = authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+        return registrationService.getRegistrationDetailForUser(id, payer, admin)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
