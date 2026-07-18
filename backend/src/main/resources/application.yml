@@ -26,13 +26,6 @@ spring:
           auth: true
           starttls:
             enable: true
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${SUPABASE_AUTH_ISSUER:https://lhpondhrhnjnimvyozdc.supabase.co/auth/v1}
-          jwk-set-uri: ${SUPABASE_AUTH_JWKS_URI:https://lhpondhrhnjnimvyozdc.supabase.co/auth/v1/.well-known/jwks.json}
-
 app:
   security:
     enabled: ${APP_SECURITY_ENABLED:true}
@@ -50,6 +43,9 @@ app:
     url: ${SUPABASE_URL:${NEXT_PUBLIC_SUPABASE_URL:https://lhpondhrhnjnimvyozdc.supabase.co}}
     service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
     secret-key: ${SUPABASE_SECRET_KEY:}
+    auth:
+      issuer-uri: ${SUPABASE_AUTH_ISSUER:https://lhpondhrhnjnimvyozdc.supabase.co/auth/v1}
+      jwk-set-uri: ${SUPABASE_AUTH_JWKS_URI:https://lhpondhrhnjnimvyozdc.supabase.co/auth/v1/.well-known/jwks.json}
 
 # TODO: configure Supabase Auth, datasource, mail provider, and object storage.
 
